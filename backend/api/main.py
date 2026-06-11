@@ -1,14 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.api.routes import satellites, metrics, analysis, health
+from backend.api.routes import assess
 
 app = FastAPI(
     title="MOSIP API",
     description=(
         "Multi-Agent Orbital Sustainability Intelligence Platform — "
-        "REST API for orbital data, risk assessment, and analytics."
+        "REST API for orbital data, risk assessment, multi-agent intelligence, "
+        "compliance grading, sustainability analysis, and forecast modeling."
     ),
-    version="1.0.0",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -21,7 +23,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Existing routes ───────────────────────────────────────────────────────────
 app.include_router(health.router,     tags=["Health"])
 app.include_router(satellites.router, prefix="/satellites", tags=["Satellites"])
 app.include_router(analysis.router,   prefix="/analyze",    tags=["Analysis"])
 app.include_router(metrics.router,    prefix="/metrics",    tags=["Metrics"])
+
+# ── Multi-agent intelligence routes ──────────────────────────────────────────
+app.include_router(
+    assess.router,
+    prefix="/assess",
+    tags=["🤖 Multi-Agent Intelligence"],
+)
