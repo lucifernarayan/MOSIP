@@ -38,10 +38,27 @@ class SatelliteRepository:
 
     def get_by_name(self, name: str, limit: int = 20) -> list:
         sql = text("""
-            SELECT norad_id, object_name, object_id, inclination, mean_motion
+            SELECT s.norad_id, s.object_name, s.object_id, s.inclination, s.mean_motion,
+                   op.altitude_km, op.orbit_type, r.risk_score, r.risk_level
             FROM   satellites
-            WHERE  UPPER(object_name) LIKE UPPER(:pattern)
-            ORDER  BY object_name
+            s
+            LEFT   JOIN LATERAL (
+                SELECT altitude_km, orbit_type
+                FROM   orbital_parameters
+                WHERE  satellite_id = s.id
+                ORDER  BY created_at DESC
+                LIMIT  1
+            ) op ON true
+            LEFT   JOIN LATERAL (
+                SELECT risk_score, risk_level
+                FROM   risk_assessments
+                WHERE  satellite_id = s.id
+                ORDER  BY assessed_at DESC
+                LIMIT  1
+            ) r ON true
+            WHERE  UPPER(s.object_name) LIKE UPPER(:pattern)
+               OR  CAST(s.norad_id AS TEXT) LIKE :pattern
+            ORDER  BY s.object_name
             LIMIT  :limit
         """)
         with engine.connect() as conn:

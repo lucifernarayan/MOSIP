@@ -12,22 +12,86 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip,
   LineChart, Line,
 } from "recharts";
-import {
-  satellites, agentTimeline, buildForecast,
-  riskTone, riskLabel, severityColor, regulations, sourceColor,
-  type SatelliteTrack,
-} from "@/utils/mosip-data";
-import { assessNorad, type AssessmentPayload } from "@/utils/api";
+import { agentTimeline, sourceColor } from "@/utils/mosip-data";
+import { assessNorad, searchSatellites, type AssessmentPayload, type RegulationSearchResult, type SatelliteSummary } from "@/utils/api";
 import { DashboardCard } from "@/components/DashboardCard";
 
 const agentIcons = [Brain, Cpu, ShieldCheck, Gauge, TrendingUp, Target, FileText, CheckCircle];
+
+type AssessmentTab = "risk" | "compliance" | "sustainability" | "forecast" | "recommendations";
+
+function sectionValue(section: Record<string, unknown> | undefined, key: string) {
+  return section?.[key];
+}
+
+function sectionNumber(section: Record<string, unknown> | undefined, keys: string[]) {
+  for (const key of keys) {
+    const numeric = Number(sectionValue(section, key));
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return 0;
+}
+
+function sectionString(section: Record<string, unknown> | undefined, keys: string[], fallback = "N/A") {
+  for (const key of keys) {
+    const value = sectionValue(section, key);
+    if (typeof value === "string" && value.trim()) return value;
+    if (typeof value === "number") return String(value);
+  }
+  return fallback;
+}
+
+function sectionList(section: Record<string, unknown> | undefined, keys: string[]) {
+  for (const key of keys) {
+    const value = sectionValue(section, key);
+    if (Array.isArray(value)) return value.map(String);
+  }
+  return [];
+}
+
+function satelliteName(sat: SatelliteSummary | null) {
+  return sat?.object_name ?? "Satellite Intelligence";
+}
+
+function satelliteNorad(sat: SatelliteSummary | null) {
+  return sat?.norad_id ?? "";
+}
+
+function regulationTitle(reg: RegulationSearchResult) {
+  return reg.document || reg.source || "Retrieved regulation";
+}
+
+function buildForecastData(assessment: AssessmentPayload | null) {
+  const projections = assessment?.forecast?.projections;
+  if (projections && typeof projections === "object") {
+    const projectionMap = projections as Record<string, Record<string, unknown>>;
+    return [
+      {
+        label: "Now",
+        risk: sectionNumber(assessment?.forecast, ["baseline_risk_score"]),
+        burden: sectionNumber(assessment?.sustainability_analysis, ["environmental_burden", "orbital_burden_score"]),
+        compliance: sectionNumber(assessment?.compliance_analysis, ["compliance_score"]),
+      },
+      ...(["5yr", "10yr", "25yr"] as const).map((key) => ({
+        label: key.replace("yr", "Y"),
+        risk: Number(projectionMap[key]?.projected_risk_score) || 0,
+        burden: Number(projectionMap[key]?.shell_growth_pct) || 0,
+        compliance: sectionNumber(assessment?.compliance_analysis, ["compliance_score"]),
+      })),
+    ];
+  }
+  return [];
+}
 
 /* ── Agent Timeline Component ─────────────────────────────────────────────── */
 function AgentTimeline({ active }: { active: boolean }) {
   const [completedCount, setCompletedCount] = useState(0);
 
   useEffect(() => {
-    if (!active) { setCompletedCount(0); return; }
+    if (!active) {
+      const reset = setTimeout(() => setCompletedCount(0), 0);
+      return () => clearTimeout(reset);
+    }
     let i = 0;
     const interval = setInterval(() => {
       i++;
@@ -110,26 +174,14 @@ function SatelliteIntelContent() {
   const router = useRouter();
   const satelliteIdParam = searchParams.get("id");
 
-  const [noradId, setNoradId] = useState(satelliteIdParam || "25544");
-  const [selectedSat, setSelectedSat] = useState<SatelliteTrack | null>(null);
+  const [noradId, setNoradId] = useState(satelliteIdParam || "");
+  const [selectedSat, setSelectedSat] = useState<SatelliteSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [assessment, setAssessment] = useState<AssessmentPayload | null>(null);
-  const [activeTab, setActiveTab] = useState<"risk" | "compliance" | "sustainability" | "forecast" | "recommendations">("risk");
+  const [activeTab, setActiveTab] = useState<AssessmentTab>("risk");
   const [timelineActive, setTimelineActive] = useState(false);
-
-  useEffect(() => {
-    const matched = satellites.find((s) => s.id.toString() === noradId);
-    setSelectedSat(matched || null);
-  }, [noradId]);
-
-  useEffect(() => {
-    if (satelliteIdParam) {
-      setNoradId(satelliteIdParam);
-      runAssessment(satelliteIdParam);
-    }
-  }, [satelliteIdParam]);
 
   const runAssessment = async (idToAssess: string) => {
     setLoading(true);
@@ -160,39 +212,62 @@ function SatelliteIntelContent() {
       clearInterval(timer);
       if (result.errors && result.errors.length > 0) throw new Error(result.errors[0]);
       setAssessment(result);
+      setSelectedSat({
+        norad_id: Number(result.satellite?.norad_id ?? idToAssess),
+        object_name: sectionString(result.satellite, ["object_name", "name"], `NORAD ${idToAssess}`),
+        object_id: sectionString(result.satellite, ["object_id"], ""),
+        altitude_km: sectionNumber(result.orbital_analysis, ["altitude_km", "altitude"]),
+        orbit_type: sectionString(result.orbital_analysis, ["orbit_type", "regime", "orbital_regime"], "UNKNOWN"),
+        risk_score: sectionNumber(result.collision_analysis, ["risk_score"]),
+        risk_level: sectionString(result.collision_analysis, ["risk_level"], "UNKNOWN"),
+      });
       setTimelineActive(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearInterval(timer);
-      const matched = satellites.find((s) => s.id.toString() === idToAssess) || satellites[0];
-      await new Promise((r) => setTimeout(r, 800));
-      const mockPayload: AssessmentPayload = {
-        status: "complete",
-        satellite: { norad_id: matched.id, name: matched.name, orbit_type: matched.orbit, altitude_km: matched.alt, velocity_kms: parseFloat(matched.velocity) || 7.5, operator: matched.operator, inclination_deg: matched.orbit === "LEO" ? 51.6 : matched.orbit === "GEO" ? 0.05 : 55.0 },
-        orbital_analysis: { regime: matched.orbit, altitude: matched.alt, velocity: matched.velocity, eccentricity: 0.0008, apogee: matched.alt + 3, perigee: matched.alt - 3, period_min: matched.orbit === "LEO" ? 92.8 : 1436 },
-        collision_analysis: { risk_score: matched.risk, risk_level: matched.risk >= 75 ? "CRITICAL" : matched.risk >= 55 ? "HIGH" : matched.risk >= 30 ? "MODERATE" : "NOMINAL", debris_density_score: Math.round(matched.risk * 0.8), conjunction_frequency: matched.risk >= 75 ? "4.2 / week" : matched.risk >= 55 ? "1.8 / week" : "0.2 / week", risk_drivers: [matched.risk >= 55 ? "High debris shell occupancy" : "Standard orbital path", matched.risk >= 75 ? "Unshielded payload surface risk" : "Passive micrometeoroid risk", "Active conjunction event windows"] },
-        compliance_analysis: { compliance_grade: matched.compliance, status: matched.risk >= 75 ? "NON-COMPLIANT" : matched.risk >= 55 ? "CONDITIONAL" : "COMPLIANT", violations: matched.risk >= 75 ? ["25-Year deorbit post-mission delay", "Passivation mechanism failure"] : matched.risk >= 55 ? ["Partial post-mission disposal plan missing"] : [], reasoning: `${matched.name} assessed at compliance grade ${matched.compliance} under current IADC guidelines.`, regulations_used: 3 },
-        sustainability_analysis: { sustainability_index: matched.sustainability, orbital_burden_score: Math.round(100 - matched.sustainability), cross_section_sqm: matched.orbit === "LEO" ? 400 : 25, operational_footprint: matched.risk >= 75 ? "EXTREMELY CONGESTED" : matched.risk >= 55 ? "MODERATELY CONGESTED" : "NOMINAL" },
-        forecast: { five_year_risk: Math.round(matched.risk * 1.15), ten_year_risk: Math.round(matched.risk * 1.35), twenty_five_year_risk: Math.min(100, Math.round(matched.risk * 1.7)), decay_estimate_years: matched.orbit === "LEO" ? 18 : 10000 },
-        mitigation_analysis: { maneuver_urgency: matched.risk >= 75 ? "CRITICAL" : matched.risk >= 55 ? "ELEVATED" : "LOW", recommended_maneuvers: [matched.risk >= 75 ? "Delta-V avoidance burn 0.45 m/s" : "Maintain attitude tracking", "Fuel passivation audit before EoL", "Submit updated STM ephemeris data"] },
-        recommendations: [{ title: "Debris Mitigation Burn", action: "Perform retro-thrust avoidance to increase clearance with cataloged debris cloud.", priority: matched.risk >= 75 ? "HIGH" : "MEDIUM" }, { title: "Passivation Protocol", action: "Vent all residual propellant at decommissioning to prevent pressure-burst explosion risks.", priority: "HIGH" }],
-        report: `MOSIP EXECUTIVE BRIEF\nTARGET: ${matched.name} (NORAD ID: ${matched.id})\nOPERATOR: ${matched.operator}\nREGIME: ${matched.orbit}\n\nCollision Risk: ${matched.risk}% | Compliance: ${matched.compliance} | Sustainability: ${matched.sustainability}/100\n\nGenerated by MOSIP LangGraph Platform.`,
-      };
-      setAssessment(mockPayload);
-      setTimelineActive(true);
+      setError(err instanceof Error ? err.message : `Assessment failed for NORAD ${idToAssess}.`);
     } finally {
       setLoading(false);
       setLoadingStep("");
     }
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (satelliteIdParam) {
+      void Promise.resolve().then(() => {
+        setNoradId(satelliteIdParam);
+        runAssessment(satelliteIdParam);
+      });
+    }
+  }, [satelliteIdParam]);
+
+  const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (noradId.trim()) router.push(`/satellites?id=${noradId.trim()}`);
+    const trimmed = noradId.trim();
+    if (!trimmed) return;
+    if (/^\d+$/.test(trimmed)) {
+      router.push(`/satellites?id=${trimmed}`);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = await searchSatellites(trimmed, 1);
+      const match = payload.results[0];
+      if (!match) throw new Error(`No satellite found for "${trimmed}".`);
+      setSelectedSat(match);
+      setNoradId(String(match.norad_id));
+      router.push(`/satellites?id=${match.norad_id}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Satellite search failed.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const sat = selectedSat;
-  const forecastData = sat ? buildForecast(sat) : [];
-  const riskScore = (assessment?.collision_analysis?.risk_score as number) || 0;
+  const forecastData = buildForecastData(assessment);
+  const riskScore = Number(assessment?.collision_analysis?.risk_score) || 0;
+  const sustainabilityIndex = Number(assessment?.sustainability_analysis?.sustainability_index) || 0;
 
   // 4 agent metric cards data
   const agentCards = assessment ? [
@@ -222,10 +297,10 @@ function SatelliteIntelContent() {
     },
     {
       eyebrow: "Sustainability Agent",
-      metric: `${assessment.sustainability_analysis?.sustainability_index || 0}`,
+      metric: `${sustainabilityIndex}`,
       unit: "/100",
       detail: `Burden: ${assessment.sustainability_analysis?.orbital_burden_score || 0}/100`,
-      spark: [80, 75, 78, 72, 70, 68, assessment.sustainability_analysis?.sustainability_index || 70],
+      spark: [80, 75, 78, 72, 70, 68, sustainabilityIndex || 70],
       color: "#00ff9d",
     },
   ] : [];
@@ -237,11 +312,11 @@ function SatelliteIntelContent() {
         <div>
           <span className="eyebrow block mb-1">Multi-Agent Synthesis Engine</span>
           <h1 className="text-2xl font-bold uppercase tracking-wider text-white">
-            {sat ? sat.name : "Satellite Intelligence"}
+            {satelliteName(sat)}
           </h1>
           {sat && (
             <div className="mt-2 flex items-center gap-2">
-              <span className="font-digital text-[10px] text-slate-500">NORAD {sat.id}</span>
+              <span className="font-digital text-[10px] text-slate-500">NORAD {satelliteNorad(sat)}</span>
               <span className="text-white/10">|</span>
               <span
                 className="rounded-full border px-2 py-0.5 font-digital text-[9px] uppercase"
@@ -253,7 +328,7 @@ function SatelliteIntelContent() {
               >
                 {riskScore >= 75 ? "⬛ CRITICAL" : riskScore >= 55 ? "⬛ ELEVATED" : "● NOMINAL"}
               </span>
-              <span className="font-digital text-[9px] text-slate-500">{sat.operator}</span>
+              <span className="font-digital text-[9px] text-slate-500">{sat.object_id || "Catalogued"}</span>
             </div>
           )}
         </div>
@@ -356,7 +431,7 @@ function SatelliteIntelContent() {
                     return (
                       <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
+                        onClick={() => setActiveTab(tab.id as AssessmentTab)}
                         className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-digital text-[10px] uppercase tracking-wider transition-all ${
                           active
                             ? "border-[#00d4ff]/30 bg-[#00d4ff]/08 text-[#00d4ff]"
@@ -486,19 +561,19 @@ function SatelliteIntelContent() {
                   {activeTab === "recommendations" && (
                     <div className="flex flex-col gap-3">
                       <h3 className="text-sm font-semibold uppercase tracking-wider text-white">Actionable Mitigation Mandates</h3>
-                      {((assessment.recommendations as any[]) || []).map((rec: any, i: number) => (
+                      {(assessment.recommendations || []).map((rec, i: number) => (
                         <div key={i} className="cyber-panel p-4 flex items-start gap-3">
-                          <div className={`rounded-lg p-1.5 shrink-0 ${rec.priority === "HIGH" ? "bg-[#ff3366]/10 text-[#ff3366]" : "bg-[#00d4ff]/10 text-[#00d4ff]"}`}>
+                          <div className={`rounded-lg p-1.5 shrink-0 ${String(rec.priority || "") === "HIGH" ? "bg-[#ff3366]/10 text-[#ff3366]" : "bg-[#00d4ff]/10 text-[#00d4ff]"}`}>
                             <Brain size={14} />
                           </div>
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <h4 className="text-xs font-semibold text-white uppercase tracking-wider">{rec.title}</h4>
-                              <span className={`font-digital text-[8px] uppercase px-1.5 py-0.5 rounded ${rec.priority === "HIGH" ? "bg-[#ff3366]/10 text-[#ff3366]" : "bg-white/[0.04] text-slate-400"}`}>
-                                {rec.priority}
+                              <h4 className="text-xs font-semibold text-white uppercase tracking-wider">{String(rec.title || "Recommendation")}</h4>
+                              <span className={`font-digital text-[8px] uppercase px-1.5 py-0.5 rounded ${String(rec.priority || "") === "HIGH" ? "bg-[#ff3366]/10 text-[#ff3366]" : "bg-white/[0.04] text-slate-400"}`}>
+                                {String(rec.priority || "INFO")}
                               </span>
                             </div>
-                            <p className="text-xs text-slate-300">{rec.action}</p>
+                            <p className="text-xs text-slate-300">{String(rec.action || "")}</p>
                           </div>
                         </div>
                       ))}
@@ -542,15 +617,18 @@ function SatelliteIntelContent() {
               <div className="cyber-panel p-4">
                 <span className="eyebrow block mb-3">RAG — Retrieved Regulations</span>
                 <div className="bg-black/50 border border-white/[0.04] rounded-lg p-3 font-digital text-[10px] text-slate-400 space-y-3 max-h-[200px] overflow-y-auto">
-                  {regulations.slice(0, 3).map((reg) => (
-                    <div key={reg.id}>
+                  {(assessment.regulations || []).slice(0, 3).map((reg, i) => (
+                    <div key={`${reg.source || "reg"}-${reg.document || i}`}>
                       <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-[8px] uppercase px-1.5 py-0.5 rounded" style={{ background: `${sourceColor(reg.source)}15`, color: sourceColor(reg.source) }}>{reg.source}</span>
-                        <span className="text-white/60 truncate">{reg.name}</span>
+                        <span className="text-[8px] uppercase px-1.5 py-0.5 rounded" style={{ background: `${sourceColor(reg.source || "")}15`, color: sourceColor(reg.source || "") }}>{reg.source || "RAG"}</span>
+                        <span className="text-white/60 truncate">{regulationTitle(reg)}</span>
                       </div>
-                      <p className="text-slate-500 leading-relaxed line-clamp-2">§ {reg.excerpt.slice(0, 100)}...</p>
+                      <p className="text-slate-500 leading-relaxed line-clamp-2">§ {(reg.text || "").slice(0, 140)}...</p>
                     </div>
                   ))}
+                  {(!assessment.regulations || assessment.regulations.length === 0) && (
+                    <p className="text-slate-500">No regulation evidence returned by the assessment pipeline.</p>
+                  )}
                 </div>
               </div>
             </div>

@@ -57,6 +57,7 @@ def _format_assessment(state: dict) -> dict:
         "recommendations":       state.get("recommendations", []),
         "report":                state.get("report", ""),
         "agent_timeline":        state.get("agent_timeline", []),
+        "regulations":           state.get("regulations", []),
         "regulations_used":      len(state.get("regulations", [])),
         "errors":                errors,
         "status":                "error" if errors else "complete",

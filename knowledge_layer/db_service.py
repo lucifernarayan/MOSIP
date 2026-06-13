@@ -2,7 +2,7 @@
 db_service.py
 -------------
 Direct SQLAlchemy data access for the MOSIP knowledge layer.
-Falls back to a high-fidelity in-memory mock database if PostgreSQL is offline.
+PostgreSQL is the source of truth; database failures are surfaced to callers.
 """
 
 import json
@@ -263,37 +263,8 @@ def get_satellite_profile(norad_id: int) -> dict | None:
             return None
         return dict(row._mapping)
     except Exception as e:
-        logger.warning(f"Database query failed, falling back to mock: {e}")
-        # Search the mock list
-        for sat in MOCK_SATELLITES:
-            if sat["norad_id"] == norad_id:
-                return sat
-        # Fallback for dynamic/unknown norad_ids
-        return {
-            "id": norad_id,
-            "norad_id": norad_id,
-            "object_name": f"SAT-NORAD-{norad_id}",
-            "object_id": "2026-MOCK-A",
-            "epoch_time": "2026-06-11T12:00:00",
-            "inclination": 55.0,
-            "eccentricity": 0.001,
-            "mean_motion": 15.0,
-            "bstar": 0.0001,
-            "raan": 100.0,
-            "arg_of_perigee": 180.0,
-            "altitude_km": 600.0,
-            "apogee_km": 605.0,
-            "perigee_km": 595.0,
-            "orbit_type": "LEO",
-            "period_minutes": 96.0,
-            "semi_major_axis": 6971.0,
-            "risk_score": 45.0,
-            "risk_level": "MEDIUM",
-            "collision_risk": 40.0,
-            "debris_risk": 38.0,
-            "altitude_risk": 42.0,
-            "risk_drivers": json.dumps(["Uncataloged micrometeoroid hazard", "High shell congestion"])
-        }
+        logger.error(f"Database query failed: {e}", exc_info=True)
+        return None
 
 
 def get_population_metrics() -> dict:
@@ -326,24 +297,13 @@ def get_population_metrics() -> dict:
             "average_risk_score": round(float(avg_risk), 2) if avg_risk else 0.0,
         }
     except Exception as e:
-        logger.warning(f"Database query failed, falling back to mock: {e}")
-        # Compute from mock data
-        total = len(MOCK_SATELLITES)
-        orbit_dist = {}
-        risk_dist = {}
-        total_risk = 0.0
-        for s in MOCK_SATELLITES:
-            ot = s["orbit_type"]
-            rl = s["risk_level"]
-            orbit_dist[ot] = orbit_dist.get(ot, 0) + 1
-            risk_dist[rl] = risk_dist.get(rl, 0) + 1
-            total_risk += s["risk_score"]
-
+        logger.error(f"Database query failed: {e}", exc_info=True)
         return {
-            "total_satellites":   total,
-            "orbit_distribution": orbit_dist,
-            "risk_distribution":  risk_dist,
-            "average_risk_score": round(total_risk / total, 2) if total else 0.0,
+            "total_satellites":   0,
+            "orbit_distribution": {},
+            "risk_distribution":  {},
+            "average_risk_score": 0.0,
+            "error": str(e),
         }
 
 
@@ -374,19 +334,8 @@ def get_orbit_neighbors(orbit_type: str, altitude_km: float,
             }).fetchall()
         return [dict(r._mapping) for r in rows]
     except Exception as e:
-        logger.warning(f"Database query failed, falling back to mock: {e}")
-        neighbors = []
-        for s in MOCK_SATELLITES:
-            if s["orbit_type"] == orbit_type and lo <= s["altitude_km"] <= hi:
-                neighbors.append({
-                    "norad_id": s["norad_id"],
-                    "object_name": s["object_name"],
-                    "altitude_km": s["altitude_km"],
-                    "orbit_type": s["orbit_type"],
-                    "risk_score": s["risk_score"]
-                })
-        neighbors.sort(key=lambda x: x["risk_score"], reverse=True)
-        return neighbors[:limit]
+        logger.error(f"Database query failed: {e}", exc_info=True)
+        return []
 
 
 def get_high_risk_neighbors(orbit_type: str, threshold: float = 60.0,
@@ -410,18 +359,8 @@ def get_high_risk_neighbors(orbit_type: str, threshold: float = 60.0,
             }).fetchall()
         return [dict(r._mapping) for r in rows]
     except Exception as e:
-        logger.warning(f"Database query failed, falling back to mock: {e}")
-        high_risk = []
-        for s in MOCK_SATELLITES:
-            if s["orbit_type"] == orbit_type and s["risk_score"] >= threshold:
-                high_risk.append({
-                    "norad_id": s["norad_id"],
-                    "object_name": s["object_name"],
-                    "risk_score": s["risk_score"],
-                    "risk_level": s["risk_level"]
-                })
-        high_risk.sort(key=lambda x: x["risk_score"], reverse=True)
-        return high_risk[:limit]
+        logger.error(f"Database query failed: {e}", exc_info=True)
+        return []
 
 
 if __name__ == "__main__":

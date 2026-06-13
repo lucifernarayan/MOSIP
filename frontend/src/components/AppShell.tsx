@@ -5,11 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navItems } from "@/utils/mosip-data";
 import { User, Satellite, Shield, ChevronRight } from "lucide-react";
+import { getHealth, getMetricsSummary, type HealthPayload } from "@/utils/api";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [utc, setUtc] = useState("");
+  const [health, setHealth] = useState<HealthPayload | null>(null);
+  const [trackedCount, setTrackedCount] = useState<number | null>(null);
 
   useEffect(() => {
     const tick = () => {
@@ -20,6 +23,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadStatus() {
+      try {
+        const [healthPayload, metricsPayload] = await Promise.all([
+          getHealth(),
+          getMetricsSummary(),
+        ]);
+        if (cancelled) return;
+        setHealth(healthPayload);
+        setTrackedCount(metricsPayload.total_satellites ?? null);
+      } catch {
+        if (!cancelled) setHealth({ status: "degraded" });
+      }
+    }
+    loadStatus();
+    const id = setInterval(loadStatus, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  const systemsNominal = health?.status === "ok";
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "var(--color-bg)" }}>
@@ -65,8 +93,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Status indicator row */}
         {sidebarExpanded && (
           <div className="mx-2 mt-2 flex items-center gap-1.5 rounded-md bg-[rgba(0,255,157,0.04)] border border-[#00ff9d]/10 px-3 py-1.5">
-            <span className="pulse-dot" style={{ background: "#00ff9d", width: 5, height: 5 }} />
-            <span className="font-digital text-[8px] uppercase tracking-widest text-[#00ff9d]/70">Systems nominal</span>
+            <span className="pulse-dot" style={{ background: systemsNominal ? "#00ff9d" : "#ffb700", width: 5, height: 5 }} />
+            <span className="font-digital text-[8px] uppercase tracking-widest text-[#00ff9d]/70">
+              {systemsNominal ? "Systems nominal" : "Systems degraded"}
+            </span>
           </div>
         )}
 
@@ -152,10 +182,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="hidden md:flex items-center gap-4 font-digital text-[10px] tracking-wider text-slate-500">
             <span className="flex items-center gap-1.5">
               <span className="pulse-dot" style={{ background: "var(--color-success)", width: 5, height: 5 }} />
-              <span className="text-[#00ff9d]/80">TELEMETRY ACTIVE</span>
+              <span className={systemsNominal ? "text-[#00ff9d]/80" : "text-[#ffb700]/80"}>
+                {systemsNominal ? "TELEMETRY ACTIVE" : "CHECK HEALTH"}
+              </span>
             </span>
             <span className="text-white/[0.08]">|</span>
-            <span className="text-slate-400">19,274 OBJECTS TRACKED</span>
+            <span className="text-slate-400">{trackedCount?.toLocaleString() ?? "0"} OBJECTS TRACKED</span>
             <span className="text-white/[0.08]">|</span>
             <span className="flex items-center gap-1">
               <Shield size={9} className="text-[#00d4ff]/40" />

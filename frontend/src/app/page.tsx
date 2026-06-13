@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Zap, AlertTriangle, Cpu, TrendingUp } from "lucide-react";
-import { satellites, riskGradient } from "@/utils/mosip-data";
+import { riskGradient } from "@/utils/mosip-data";
 import type { SatelliteTrack } from "@/utils/mosip-data";
 import { GlobeWrapper } from "@/components/GlobeWrapper";
+import { getMetricsSummary, listSatellites, searchSatellites, type MetricsSummaryPayload, type SatelliteSummary } from "@/utils/api";
 
 /* ── Count-up Hook ─────────────────────────────────────────────────────────── */
 function useCountUp(target: number, duration = 2000, deps: unknown[] = []) {
@@ -39,15 +40,52 @@ function parseVel(v: string): number {
   return parseFloat(v.replace(/[^\d.]/g, "")) || 0;
 }
 
+function orbitType(value?: string | null): SatelliteTrack["orbit"] {
+  if (value === "MEO" || value === "GEO" || value === "HEO") return value;
+  return "LEO";
+}
+
+function catalogPosition(noradId: number) {
+  return {
+    lat: ((noradId * 37) % 140) - 70,
+    lng: ((noradId * 53) % 360) - 180,
+  };
+}
+
+function toTrack(sat: SatelliteSummary): SatelliteTrack {
+  const orbit = orbitType(sat.orbit_type);
+  const altitude = Math.round(Number(sat.altitude_km) || (orbit === "GEO" ? 35786 : orbit === "MEO" ? 20200 : 550));
+  const risk = Math.round(Number(sat.risk_score) || 0);
+  const position = catalogPosition(sat.norad_id);
+
+  return {
+    id: sat.norad_id,
+    name: sat.object_name,
+    orbit,
+    lat: position.lat,
+    lng: position.lng,
+    alt: altitude,
+    velocity: orbit === "GEO" ? "3.07 km/s" : orbit === "MEO" ? "3.90 km/s" : "7.50 km/s",
+    risk,
+    compliance: sat.risk_level || "N/A",
+    sustainability: Math.max(0, 100 - risk),
+    forecast: risk >= 75 ? "critical" : risk >= 55 ? "elevated" : risk >= 35 ? "watch" : "nominal",
+    operator: sat.object_id || "Catalogued",
+  };
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function MissionControlPage() {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<number>(satellites[0].id);
+  const [satellites, setSatellites] = useState<SatelliteTrack[]>([]);
+  const [metrics, setMetrics] = useState<MetricsSummaryPayload | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const selectedSat = useMemo(
-    () => satellites.find((s) => s.id === selectedId) ?? satellites[0],
-    [selectedId],
+    () => satellites.find((s) => s.id === selectedId) ?? satellites[0] ?? null,
+    [satellites, selectedId],
   );
 
   const filteredSatellites = useMemo(() => {
@@ -58,15 +96,61 @@ export default function MissionControlPage() {
     );
   }, [searchQuery]);
 
-  const heroCount = useCountUp(19274, 2200);
-  const velNum = useCountUp(Math.round(parseVel(selectedSat.velocity) * 100), 800, [selectedId]);
-  const altCount = useCountUp(selectedSat.alt, 800, [selectedId]);
-  const riskCount = useCountUp(selectedSat.risk, 800, [selectedId]);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadInitialData() {
+      try {
+        const [satPayload, metricsPayload] = await Promise.all([
+          listSatellites(100, 0),
+          getMetricsSummary(),
+        ]);
+        if (cancelled) return;
+        const tracks = satPayload.satellites.map(toTrack);
+        setSatellites(tracks);
+        setMetrics(metricsPayload);
+        setSelectedId(tracks[0]?.id ?? null);
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Unable to load live satellite data.");
+      }
+    }
+    loadInitialData();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const trimmed = searchQuery.trim();
+    const timer = setTimeout(async () => {
+      try {
+        const payload = trimmed.length >= 2
+          ? await searchSatellites(trimmed, 100)
+          : await listSatellites(100, 0);
+        if (cancelled) return;
+        const nextSatellites = "results" in payload ? payload.results : payload.satellites;
+        const tracks = nextSatellites.map(toTrack);
+        setSatellites(tracks);
+        setSelectedId((current) => tracks.some((sat) => sat.id === current) ? current : tracks[0]?.id ?? null);
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Satellite search failed.");
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  const heroCount = useCountUp(metrics?.total_satellites ?? 0, 2200);
+  const velNum = useCountUp(Math.round(parseVel(selectedSat?.velocity ?? "0") * 100), 800, [selectedId]);
+  const altCount = useCountUp(selectedSat?.alt ?? 0, 800, [selectedId]);
+  const riskCount = useCountUp(selectedSat?.risk ?? 0, 800, [selectedId]);
 
   const handleSelect = useCallback((sat: SatelliteTrack) => setSelectedId(sat.id), []);
 
   const riskToneClass =
-    selectedSat.risk >= 75 ? "text-[#ff3366]" : selectedSat.risk >= 55 ? "text-[#ffb700]" : "text-[#00ff9d]";
+    (selectedSat?.risk ?? 0) >= 75 ? "text-[#ff3366]" : (selectedSat?.risk ?? 0) >= 55 ? "text-[#ffb700]" : "text-[#00ff9d]";
 
   return (
     <div className="relative flex h-[calc(100vh-var(--topbar-h))] overflow-hidden cyber-grid">
@@ -100,10 +184,10 @@ export default function MissionControlPage() {
           transition={{ delay: 0.3, duration: 0.5 }}
         >
           {[
-            { label: "Active Tracking", value: "19,274", dot: "#00ff9d" },
-            { label: "Risk Alerts", value: "47", dot: "#ff3366", valueClass: "text-[#ff3366]" },
+            { label: "Active Tracking", value: (metrics?.total_satellites ?? 0).toLocaleString(), dot: "#00ff9d" },
+            { label: "Risk Alerts", value: String(metrics?.critical_risk_count ?? 0), dot: "#ff3366", valueClass: "text-[#ff3366]" },
             { label: "Agents Online", value: "8/8", dot: "#00d4ff", valueClass: "text-[#00d4ff]" },
-            { label: "Compliance", value: "71%", dot: "#ffb700", valueClass: "text-[#ffb700]" },
+            { label: "Avg Risk", value: `${metrics?.average_risk_score ?? 0}%`, dot: "#ffb700", valueClass: "text-[#ffb700]" },
           ].map((pill) => (
             <div key={pill.label} className="cyber-panel flex items-center gap-2 px-3 py-2">
               <span className="pulse-dot shrink-0" style={{ background: pill.dot, width: 5, height: 5 }} />
@@ -133,6 +217,9 @@ export default function MissionControlPage() {
               className="w-full bg-transparent font-digital text-[11px] text-white/80 placeholder:text-white/20 outline-none"
             />
           </div>
+          {error && (
+            <p className="mt-2 font-digital text-[9px] uppercase tracking-wider text-[#ff3366]">{error}</p>
+          )}
         </motion.div>
 
         {/* ── Satellite list ──────────────────────────────────────────── */}
@@ -187,7 +274,8 @@ export default function MissionControlPage() {
           className="cta-glow h-12 w-full font-digital text-xs uppercase tracking-[0.25em]"
           whileHover={{ scale: 1.015 }}
           whileTap={{ scale: 0.985 }}
-          onClick={() => router.push(`/satellites?id=${selectedId}`)}
+          onClick={() => selectedId && router.push(`/satellites?id=${selectedId}`)}
+          disabled={!selectedId}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
@@ -203,7 +291,7 @@ export default function MissionControlPage() {
       <div className="relative flex flex-1 flex-col">
         {/* Globe */}
         <div className="relative flex-1 overflow-hidden">
-          <GlobeWrapper satellites={satellites} selectedId={selectedId} onSelect={handleSelect} />
+          <GlobeWrapper satellites={satellites} selectedId={selectedId ?? 0} onSelect={handleSelect} />
         </div>
 
         {/* ── Telemetry strip ──────────────────────────────────────────── */}

@@ -2,70 +2,89 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sliders, Gauge, RotateCcw, Zap, AlertTriangle, CheckCircle, ShieldCheck } from "lucide-react";
+import { Sliders, Gauge, RotateCcw, Zap, AlertTriangle, ShieldCheck } from "lucide-react";
 import {
   ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis,
   BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid,
 } from "recharts";
+import { assessRaw, type AssessmentPayload } from "@/utils/api";
 
-/* ── Simulation Engine ─────────────────────────────────────────────────────── */
-function simulateOrbit(altitude: number, inclination: number, eccentricity: number, debrisDensity: number, conjunctions: number) {
-  const riskScore = Math.min(100, Math.round(
-    (altitude / 1200) * 18 + debrisDensity * 3.1 + conjunctions * 4.2 +
-    eccentricity * 120 + Math.max(0, (inclination - 80) * 0.4)
-  ));
-  const burden = Math.min(100, Math.round((altitude / 900) * 22 + debrisDensity * 2.8 + 12));
-  const sustainability = Math.max(0, 100 - burden);
-  let grade = "A", status = "COMPLIANT";
-  let violations: string[] = [];
-
-  if (riskScore >= 70) {
-    grade = "D"; status = "NON-COMPLIANT";
-    violations = [
-      "Orbital lifetime exceeds 25-year IADC post-mission disposal rule.",
-      "Conjunction probability above 1×10⁻⁵/yr threshold.",
-    ];
-  } else if (riskScore >= 50) {
-    grade = "C+"; status = "CONDITIONAL";
-    violations = ["Deorbit timeline marginally exceeds IADC 15-year recommended window."];
-  } else if (riskScore >= 30) {
-    grade = "B+"; status = "COMPLIANT";
-  }
-
-  const velocity = parseFloat((7.9 - (altitude / 1000) * 0.48).toFixed(2));
-  const apogee = Math.round(altitude + altitude * eccentricity * 12);
-  const perigee = Math.round(altitude - altitude * eccentricity * 12);
-  const period = Math.round(84.3 * Math.pow((6371 + altitude) / 6371, 1.5));
-  const regime = altitude > 2000 ? "MEO" : altitude < 300 ? "VLEO" : "LEO";
-
-  const forecast = [
-    { name: "Now", risk: riskScore },
-    { name: "5Y", risk: Math.min(100, Math.round(riskScore * 1.12)) },
-    { name: "10Y", risk: Math.min(100, Math.round(riskScore * 1.28)) },
-    { name: "25Y", risk: Math.min(100, Math.round(riskScore * 1.58)) },
-  ];
-
-  const chartData = [
-    { name: "Collision Risk", score: riskScore },
-    { name: "Eco Burden", score: burden },
-    { name: "Sustainability", score: sustainability },
-  ];
-
-  const feedback: string[] = [];
-  if (altitude >= 750 && altitude <= 950) feedback.push("⚠ CRITICAL BELT: Altitude overlaps 750–950 km peak debris shell. Lower below 640 km or raise above 1,100 km.");
-  if (conjunctions >= 5) feedback.push("⚠ CONJUNCTION OVERLOAD: >5 events/week exceeds ESA Rule 4.2. Autonomous collision-avoidance thrusters required.");
-  if (altitude < 500) feedback.push("✓ DRAG DEORBIT ADVANTAGE: <500 km guarantees passive deorbit within 5–7 years — IADC compliant.");
-  if (inclination >= 95 && inclination <= 100) feedback.push("⚠ SUN-SYNC CONGESTION: 97°–99° shares crowded sun-synchronous corridor.");
-  if (eccentricity > 0.02) feedback.push("⚠ HIGH ECCENTRICITY: Sweeps multiple altitude shells, multiplying conjunction exposure.");
-  if (feedback.length === 0) feedback.push("✓ NOMINAL DESIGN: Orbital parameters within safe operational margins.");
-
-  return { riskScore, burden, sustainability, grade, status, violations, velocity, apogee, perigee, period, regime, forecast, chartData, feedback };
-}
+type SimulationResults = {
+  riskScore: number;
+  burden: number;
+  sustainability: number;
+  grade: string;
+  status: string;
+  violations: string[];
+  velocity: number;
+  apogee: number;
+  perigee: number;
+  period: number;
+  regime: string;
+  forecast: { name: string; risk: number }[];
+  chartData: { name: string; score: number }[];
+  feedback: string[];
+};
 
 function riskColor(score: number) {
   if (score >= 70) return "#ff3366";
   if (score >= 50) return "#ffb700";
   return "#00ff9d";
+}
+
+function valueFrom(section: Record<string, unknown> | undefined, keys: string[], fallback = 0) {
+  for (const key of keys) {
+    const value = Number(section?.[key]);
+    if (Number.isFinite(value)) return value;
+  }
+  return fallback;
+}
+
+function textFrom(section: Record<string, unknown> | undefined, keys: string[], fallback = "") {
+  for (const key of keys) {
+    const value = section?.[key];
+    if (typeof value === "string" && value.trim()) return value;
+    if (typeof value === "number") return String(value);
+  }
+  return fallback;
+}
+
+function resultsFromAssessment(assessment: AssessmentPayload): SimulationResults {
+  const riskScore = Math.round(valueFrom(assessment.collision_analysis, ["risk_score"]));
+  const burden = Math.round(valueFrom(assessment.sustainability_analysis, ["orbital_burden_score", "environmental_burden"]));
+  const sustainability = Math.round(valueFrom(assessment.sustainability_analysis, ["sustainability_index"]));
+  const projections = assessment.forecast?.projections as Record<string, Record<string, unknown>> | undefined;
+  const feedback = [
+    textFrom(assessment.collision_analysis, ["summary"], ""),
+    textFrom(assessment.compliance_analysis, ["reasoning", "compliance_summary"], ""),
+    textFrom(assessment.sustainability_analysis, ["narrative"], ""),
+  ].filter(Boolean);
+
+  return {
+    riskScore,
+    burden,
+    sustainability,
+    grade: textFrom(assessment.compliance_analysis, ["compliance_grade"], "N/A"),
+    status: textFrom(assessment.compliance_analysis, ["status", "compliance_level"], "UNKNOWN"),
+    violations: Array.isArray(assessment.compliance_analysis?.violations) ? assessment.compliance_analysis.violations.map(String) : [],
+    velocity: valueFrom(assessment.orbital_analysis, ["velocity"]),
+    apogee: Math.round(valueFrom(assessment.orbital_analysis, ["apogee"])),
+    perigee: Math.round(valueFrom(assessment.orbital_analysis, ["perigee"])),
+    period: Math.round(valueFrom(assessment.orbital_analysis, ["period_min"])),
+    regime: textFrom(assessment.orbital_analysis, ["regime", "orbit_type"], "UNKNOWN"),
+    forecast: [
+      { name: "Now", risk: riskScore },
+      { name: "5Y", risk: Math.round(Number(projections?.["5yr"]?.projected_risk_score) || 0) },
+      { name: "10Y", risk: Math.round(Number(projections?.["10yr"]?.projected_risk_score) || 0) },
+      { name: "25Y", risk: Math.round(Number(projections?.["25yr"]?.projected_risk_score) || 0) },
+    ],
+    chartData: [
+      { name: "Collision Risk", score: riskScore },
+      { name: "Eco Burden", score: burden },
+      { name: "Sustainability", score: sustainability },
+    ],
+    feedback: feedback.length ? feedback : ["No backend narrative returned."],
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -76,19 +95,33 @@ export default function SimulatorPage() {
   const [debrisDensity, setDebrisDensity] = useState(12.4);
   const [conjunctions, setConjunctions] = useState(3.5);
   const [simulating, setSimulating] = useState(false);
-  const [results, setResults] = useState<ReturnType<typeof simulateOrbit> | null>(null);
+  const [results, setResults] = useState<SimulationResults | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const runSim = async () => {
     setSimulating(true);
     setResults(null);
-    await new Promise((r) => setTimeout(r, 1400));
-    setResults(simulateOrbit(altitude, inclination, eccentricity, debrisDensity, conjunctions));
-    setSimulating(false);
+    setError(null);
+    try {
+      const assessment = await assessRaw({
+        altitude_km: altitude,
+        inclination,
+        eccentricity,
+        debris_density: debrisDensity,
+        conjunction_frequency: conjunctions,
+      });
+      if (assessment.errors?.length) throw new Error(assessment.errors[0]);
+      setResults(resultsFromAssessment(assessment));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Raw assessment failed.");
+    } finally {
+      setSimulating(false);
+    }
   };
 
   const resetAll = () => {
     setAltitude(650); setInclination(55.2); setEccentricity(0.001);
-    setDebrisDensity(12.4); setConjunctions(3.5); setResults(null);
+    setDebrisDensity(12.4); setConjunctions(3.5); setResults(null); setError(null);
   };
 
   const sliders = [
@@ -104,6 +137,7 @@ export default function SimulatorPage() {
       <div className="mb-5">
         <span className="eyebrow block mb-1">Pre-Launch Orbital Modeler</span>
         <h1 className="text-2xl font-bold uppercase tracking-wider text-white">Virtual Flight Simulator</h1>
+        {error && <p className="mt-2 font-digital text-[10px] uppercase tracking-wider text-[#ff3366]">{error}</p>}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">

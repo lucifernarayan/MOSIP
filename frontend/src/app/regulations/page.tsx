@@ -1,17 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, BookOpen, SearchX, ShieldCheck } from "lucide-react";
-import { regulations, sourceColor, type Regulation } from "@/utils/mosip-data";
+import { Search, BookOpen, SearchX, ShieldCheck, RefreshCw } from "lucide-react";
+import { sourceColor } from "@/utils/mosip-data";
+import { askRegulation, searchRegulations, type RegulationAnswerPayload, type RegulationSearchResult } from "@/utils/api";
 
 function sourceBadgeStyle(source: string) {
   const color = sourceColor(source);
   return { background: `${color}12`, border: `1px solid ${color}28`, color };
 }
 
-function RegulationCard({ reg, index }: { reg: Regulation; index: number }) {
-  const borderColor = sourceColor(reg.source);
+function resultTitle(reg: RegulationSearchResult) {
+  return reg.document || reg.source || "Retrieved regulation";
+}
+
+function RegulationCard({ reg, index }: { reg: RegulationSearchResult; index: number }) {
+  const source = reg.source || "RAG";
+  const borderColor = sourceColor(source);
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -26,26 +32,26 @@ function RegulationCard({ reg, index }: { reg: Regulation; index: number }) {
         <div className="flex-1 p-5">
           {/* Header row */}
           <div className="flex items-start justify-between gap-3 mb-3">
-            <h3 className="text-sm font-semibold text-white leading-snug">{reg.name}</h3>
+            <h3 className="text-sm font-semibold text-white leading-snug">{resultTitle(reg)}</h3>
             <div className="flex items-center gap-1.5 shrink-0">
-              <span className="font-digital text-[8px] uppercase px-2 py-0.5 rounded-full" style={sourceBadgeStyle(reg.source)}>
-                {reg.source}
+              <span className="font-digital text-[8px] uppercase px-2 py-0.5 rounded-full" style={sourceBadgeStyle(source)}>
+                {source}
               </span>
-              <span className="font-digital text-[8px] text-slate-600">{reg.year}</span>
+              {reg.score != null && <span className="font-digital text-[8px] text-slate-600">{reg.score.toFixed(3)}</span>}
             </div>
           </div>
 
           {/* Excerpt — terminal style */}
           <div className="bg-black/40 border border-white/[0.04] rounded-lg p-3 font-digital text-[10px] text-slate-400 leading-relaxed">
             <span className="text-slate-600 mr-1">§</span>
-            {reg.excerpt}
+            {reg.text || "No excerpt returned."}
           </div>
 
           {/* Footer */}
           <div className="mt-3 flex items-center gap-2">
             <ShieldCheck size={11} style={{ color: borderColor }} />
             <span className="font-digital text-[8px] uppercase tracking-wider" style={{ color: `${borderColor}70` }}>
-              Regulation ID: {reg.id}
+              Evidence source: {resultTitle(reg)}
             </span>
           </div>
         </div>
@@ -55,23 +61,47 @@ function RegulationCard({ reg, index }: { reg: Regulation; index: number }) {
 }
 
 export default function RegulationsPage() {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState("space debris mitigation post mission disposal");
+  const [results, setResults] = useState<RegulationSearchResult[]>([]);
+  const [answer, setAnswer] = useState<RegulationAnswerPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = regulations.filter((r) => {
-    const q = query.toLowerCase();
-    return (
-      r.name.toLowerCase().includes(q) ||
-      r.source.toLowerCase().includes(q) ||
-      r.excerpt.toLowerCase().includes(q)
-    );
-  });
+  const sourceGroups = results.reduce<Record<string, number>>((acc, result) => {
+    const source = result.source || "RAG";
+    acc[source] = (acc[source] || 0) + 1;
+    return acc;
+  }, {});
 
-  const sourceGroups = {
-    ESA: regulations.filter((r) => r.source === "ESA").length,
-    IADC: regulations.filter((r) => r.source === "IADC").length,
-    NASA: regulations.filter((r) => r.source === "NASA").length,
-    UN: regulations.filter((r) => r.source === "UN").length,
+  const runQuery = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    const trimmed = query.trim();
+    if (trimmed.length < 3) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [searchPayload, answerPayload] = await Promise.all([
+        searchRegulations(trimmed),
+        askRegulation(trimmed, 5),
+      ]);
+      setResults(searchPayload.results || []);
+      setAnswer(answerPayload);
+      if (searchPayload.error || answerPayload.error) {
+        setError(searchPayload.error || answerPayload.error || null);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Regulation retrieval failed.");
+      setResults([]);
+      setAnswer(null);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    void Promise.resolve().then(() => runQuery());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-[calc(100vh-var(--topbar-h))] cyber-grid px-5 py-7 lg:px-8">
@@ -100,7 +130,7 @@ export default function RegulationsPage() {
           {Object.entries(sourceGroups).map(([src, count]) => (
             <button
               key={src}
-              onClick={() => setQuery(query === src.toLowerCase() ? "" : src.toLowerCase())}
+              onClick={() => setQuery(src)}
               className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-digital text-[9px] uppercase tracking-wider transition-all hover:opacity-80"
               style={sourceBadgeStyle(src)}
             >
@@ -109,7 +139,7 @@ export default function RegulationsPage() {
             </button>
           ))}
           <div className="rounded-full border border-[#00d4ff]/15 bg-[#00d4ff]/05 px-3 py-1.5 font-digital text-[9px] text-[#00d4ff]">
-            {regulations.length} Total
+            {results.length} Retrieved
           </div>
         </div>
       </motion.div>
@@ -121,14 +151,14 @@ export default function RegulationsPage() {
         transition={{ delay: 0.15 }}
         className="mb-7"
       >
-        <div
+        <form
+          onSubmit={runQuery}
           className="flex h-14 items-center gap-3 rounded-xl border px-5 transition-all"
           style={{
             background: "rgba(255,255,255,0.025)",
             backdropFilter: "blur(8px)",
             border: "1px solid rgba(0,212,255,0.08)",
           }}
-          onFocus={() => {}}
         >
           <Search className="h-5 w-5 shrink-0 text-[#00d4ff]/40" />
           <input
@@ -142,21 +172,40 @@ export default function RegulationsPage() {
             }}
           />
           {query && (
-            <button onClick={() => setQuery("")} className="shrink-0 text-slate-600 hover:text-slate-400 transition-colors font-digital text-xs">
+            <button type="button" onClick={() => setQuery("")} className="shrink-0 text-slate-600 hover:text-slate-400 transition-colors font-digital text-xs">
               ✕
             </button>
           )}
-        </div>
-        {query && (
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-[#00d4ff]/20 px-3 py-1.5 font-digital text-[10px] uppercase tracking-wider text-[#00d4ff] disabled:opacity-40"
+          >
+            {loading && <RefreshCw size={11} className="animate-spin" />}
+            Ask
+          </button>
+        </form>
+        {(query || error) && (
           <p className="mt-2 font-digital text-[9px] text-slate-500 uppercase tracking-wider">
-            {filtered.length} result{filtered.length !== 1 ? "s" : ""} for "{query}"
+            {error || `${results.length} evidence chunk${results.length !== 1 ? "s" : ""} for "${query}"`}
           </p>
         )}
       </motion.div>
 
+      {answer?.answer && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="cyber-panel mb-5 p-5"
+        >
+          <span className="eyebrow mb-2 block">Grounded Answer</span>
+          <p className="text-sm leading-relaxed text-slate-300">{answer.answer}</p>
+        </motion.div>
+      )}
+
       {/* ── Cards ────────────────────────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
-        {filtered.length > 0 ? (
+        {results.length > 0 ? (
           <motion.div
             key="results"
             initial={{ opacity: 0 }}
@@ -164,8 +213,8 @@ export default function RegulationsPage() {
             exit={{ opacity: 0 }}
             className="grid grid-cols-1 gap-4 md:grid-cols-2"
           >
-            {filtered.map((reg, i) => (
-              <RegulationCard key={reg.id} reg={reg} index={i} />
+            {results.map((reg, i) => (
+              <RegulationCard key={`${reg.source || "reg"}-${reg.document || i}-${i}`} reg={reg} index={i} />
             ))}
           </motion.div>
         ) : (
@@ -181,7 +230,7 @@ export default function RegulationsPage() {
               <SearchX className="h-7 w-7 text-slate-600" />
             </div>
             <p className="eyebrow mb-2">No Matching Regulations Found</p>
-            <p className="text-sm text-slate-500">Try broader search terms or filter by source.</p>
+            <p className="text-sm text-slate-500">Try broader search terms or confirm Qdrant is available.</p>
             <button
               onClick={() => setQuery("")}
               className="mt-4 btn-ghost rounded-lg px-5 py-2 font-digital text-xs uppercase tracking-wider"
