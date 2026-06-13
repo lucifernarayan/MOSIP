@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.api.routes import satellites, metrics, analysis, health
+from backend.api.routes import satellites, metrics, analysis, health, regulations
 from backend.api.routes import assess
 
 app = FastAPI(
@@ -28,6 +28,7 @@ app.include_router(health.router,     tags=["Health"])
 app.include_router(satellites.router, prefix="/satellites", tags=["Satellites"])
 app.include_router(analysis.router,   prefix="/analyze",    tags=["Analysis"])
 app.include_router(metrics.router,    prefix="/metrics",    tags=["Metrics"])
+app.include_router(regulations.router, prefix="/regulations", tags=["Regulations"])
 
 # ── Multi-agent intelligence routes ──────────────────────────────────────────
 app.include_router(
@@ -35,3 +36,4 @@ app.include_router(
     prefix="/assess",
     tags=["🤖 Multi-Agent Intelligence"],
 )
+

@@ -30,16 +30,16 @@ async function requestJson<T>(path: string, options: FetchOptions = {}): Promise
 }
 
 export type AssessmentPayload = {
-  satellite?: Record<string, unknown>;
-  orbital_analysis?: Record<string, unknown>;
-  collision_analysis?: Record<string, unknown>;
-  compliance_analysis?: Record<string, unknown>;
-  sustainability_analysis?: Record<string, unknown>;
-  forecast?: Record<string, unknown>;
-  mitigation_analysis?: Record<string, unknown>;
-  recommendations?: unknown[];
+  satellite?: any;
+  orbital_analysis?: any;
+  collision_analysis?: any;
+  compliance_analysis?: any;
+  sustainability_analysis?: any;
+  forecast?: any;
+  mitigation_analysis?: any;
+  recommendations?: any[];
   report?: string;
-  agent_timeline?: unknown[];
+  agent_timeline?: any[];
   status?: string;
   errors?: string[];
 };

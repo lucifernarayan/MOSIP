@@ -1,47 +1,50 @@
+"use client";
+
+import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 
 type DashboardCardProps = {
-  children: ReactNode;
-  className?: string;
-  title?: string;
+  title: string;
   eyebrow?: string;
-  tone?: "cyan" | "red" | "green" | "amber";
-};
-
-const toneClass = {
-  cyan: "cyber-panel",
-  red: "cyber-panel cyber-panel-danger",
-  green: "cyber-panel cyber-panel-success",
-  amber: "cyber-panel cyber-panel-warning",
+  children: ReactNode;
+  glowColor?: string;
+  isActive?: boolean;
+  className?: string;
+  noPad?: boolean;
+  danger?: boolean;
 };
 
 export function DashboardCard({
-  children,
-  className = "",
   title,
   eyebrow,
-  tone = "cyan",
+  children,
+  glowColor = "rgba(0,212,255,0.12)",
+  isActive = false,
+  className = "",
+  noPad = false,
+  danger = false,
 }: DashboardCardProps) {
+  const glowStyle = danger
+    ? { boxShadow: "0 0 24px rgba(255,51,102,0.12)", borderColor: "rgba(255,51,102,0.25)" }
+    : isActive
+    ? { boxShadow: `0 0 24px ${glowColor}` }
+    : undefined;
+
   return (
-    <section className={`${toneClass[tone]} rounded-lg p-4 ${className}`}>
-      {(title || eyebrow) && (
-        <header className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            {eyebrow && (
-              <p className="font-digital text-[10px] uppercase tracking-[0.24em] text-cyan-200/55">
-                {eyebrow}
-              </p>
-            )}
-            {title && (
-              <h2 className="mt-1 text-sm font-semibold uppercase tracking-[0.12em] text-slate-100">
-                {title}
-              </h2>
-            )}
-          </div>
-          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(0,240,255,0.9)]" />
-        </header>
-      )}
-      {children}
-    </section>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className={`cyber-panel overflow-hidden ${danger ? "cyber-panel-danger" : ""} ${className}`}
+      style={glowStyle}
+    >
+      <div className="border-b border-white/[0.04] px-5 py-3">
+        {eyebrow && <span className="eyebrow block mb-1">{eyebrow}</span>}
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-white font-display">
+          {title}
+        </h3>
+      </div>
+      <div className={noPad ? "" : "p-5"}>{children}</div>
+    </motion.div>
   );
 }

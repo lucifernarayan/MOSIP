@@ -6,9 +6,12 @@ Connects to the local persistent Qdrant store populated with
 ESA / IADC / NASA regulatory document embeddings.
 """
 
+import logging
 from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
 from backend.config import QDRANT_PATH, QDRANT_COLLECTION
+
+logger = logging.getLogger(__name__)
 
 # ── Embedding model (same one used during upload) ────────────────────────────
 _model = None
@@ -124,5 +127,6 @@ def qdrant_healthy() -> bool:
     try:
         client = _get_client()
         return client.collection_exists(QDRANT_COLLECTION)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Qdrant health check failed: {e}", exc_info=True)
         return False
