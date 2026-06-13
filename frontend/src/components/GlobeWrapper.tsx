@@ -21,9 +21,10 @@ type GlobeWrapperProps = {
   satellites: SatelliteTrack[];
   selectedId: number;
   onSelect: (satellite: SatelliteTrack) => void;
+  orbitPath?: { lat: number; lng: number }[];
 };
 
-export function GlobeWrapper({ satellites, selectedId, onSelect }: GlobeWrapperProps) {
+export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: GlobeWrapperProps) {
   const globeRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -58,7 +59,7 @@ export function GlobeWrapper({ satellites, selectedId, onSelect }: GlobeWrapperP
     const controls = globeRef.current?.controls?.();
     if (controls) {
       controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.3;
+      controls.autoRotateSpeed = 0.15;
       controls.enableZoom = true;
       controls.minDistance = 150;
       controls.maxDistance = 500;
@@ -128,6 +129,15 @@ export function GlobeWrapper({ satellites, selectedId, onSelect }: GlobeWrapperP
           const sat = s as SatelliteTrack;
           return sat.id === selectedId ? ["#00d4ff", "#ffffff"] : ["#00d4ff22", "#02040a"];
         }}
+        pathsData={orbitPath ? [orbitPath] : []}
+        pathPoints={(d: any) => d}
+        pathPointLat="lat"
+        pathPointLng="lng"
+        pathColor={() => "rgba(0, 212, 255, 0.4)"}
+        pathStroke={1.2}
+        pathDashLength={0.06}
+        pathDashGap={0.03}
+        pathDashAnimateTime={15000}
         width={dimensions.width}
         height={dimensions.height}
       />

@@ -45,25 +45,103 @@ function orbitType(value?: string | null): SatelliteTrack["orbit"] {
   return "LEO";
 }
 
-function catalogPosition(noradId: number) {
-  return {
-    lat: ((noradId * 37) % 140) - 70,
-    lng: ((noradId * 53) % 360) - 180,
-  };
+function propagateOrbit(noradId: number, altitudeKm: number, orbitType: string, timeMs: number) {
+  const R_earth = 6371; // Earth radius in km
+  const GM = 3.986004418e5; // km^3/s^2
+
+  let alt = altitudeKm;
+  if (!alt || alt <= 0) {
+    alt = orbitType === "GEO" ? 35786 : orbitType === "MEO" ? 20200 : 550;
+  }
+  const a = R_earth + alt;
+  const periodSec = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / GM);
+  const periodMs = periodSec * 1000;
+
+  const inclinationDeg = 30 + (noradId % 60); // 30 to 90 degrees
+  const inclinationRad = (inclinationDeg * Math.PI) / 180;
+  const raanDeg = (noradId * 13) % 360;
+  const raanRad = (raanDeg * Math.PI) / 180;
+
+  // Time speedup to make motion visible (e.g. 150x)
+  const timeSpeedup = 150;
+  const phase = ((timeMs * timeSpeedup) / periodMs) * 2 * Math.PI;
+
+  const x_orbit = a * Math.cos(phase);
+  const y_orbit = a * Math.sin(phase);
+
+  const x_eci = x_orbit * Math.cos(raanRad) - y_orbit * Math.sin(raanRad) * Math.cos(inclinationRad);
+  const y_eci = x_orbit * Math.sin(raanRad) + y_orbit * Math.cos(raanRad) * Math.cos(inclinationRad);
+  const z_eci = y_orbit * Math.sin(inclinationRad);
+
+  const r = Math.sqrt(x_eci * x_eci + y_eci * y_eci + z_eci * z_eci);
+  const lat = (Math.asin(z_eci / r) * 180) / Math.PI;
+  let lng = (Math.atan2(y_eci, x_eci) * 180) / Math.PI;
+
+  const earthRotationSpeed = 360 / (86164 * 1000);
+  const rotationAngle = (timeMs * timeSpeedup * earthRotationSpeed) % 360;
+  lng = ((lng - rotationAngle + 180) % 360) - 180;
+  if (lng < -180) lng += 360;
+
+  // Calculate velocity: v = sqrt(GM / a)
+  const vel = Math.sqrt(GM / a); // km/s
+
+  return { lat, lng, vel };
+}
+
+function generateOrbitPath(noradId: number, altitudeKm: number, orbitType: string, timeMs: number) {
+  const R_earth = 6371;
+  const GM = 3.986004418e5;
+
+  let alt = altitudeKm;
+  if (!alt || alt <= 0) {
+    alt = orbitType === "GEO" ? 35786 : orbitType === "MEO" ? 20200 : 550;
+  }
+  const a = R_earth + alt;
+  const periodSec = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / GM);
+
+  const inclinationDeg = 30 + (noradId % 60);
+  const inclinationRad = (inclinationDeg * Math.PI) / 180;
+  const raanDeg = (noradId * 13) % 360;
+  const raanRad = (raanDeg * Math.PI) / 180;
+
+  const timeSpeedup = 150;
+  const earthRotationSpeed = 360 / (86164 * 1000);
+  const rotationAngle = (timeMs * timeSpeedup * earthRotationSpeed) % 360;
+
+  const points = [];
+  const numPoints = 90;
+  for (let i = 0; i <= numPoints; i++) {
+    const phase = (i / numPoints) * 2 * Math.PI;
+    const x_orbit = a * Math.cos(phase);
+    const y_orbit = a * Math.sin(phase);
+
+    const x_eci = x_orbit * Math.cos(raanRad) - y_orbit * Math.sin(raanRad) * Math.cos(inclinationRad);
+    const y_eci = x_orbit * Math.sin(raanRad) + y_orbit * Math.cos(raanRad) * Math.cos(inclinationRad);
+    const z_eci = y_orbit * Math.sin(inclinationRad);
+
+    const r = Math.sqrt(x_eci * x_eci + y_eci * y_eci + z_eci * z_eci);
+    const lat = (Math.asin(z_eci / r) * 180) / Math.PI;
+    let lng = (Math.atan2(y_eci, x_eci) * 180) / Math.PI;
+
+    lng = ((lng - rotationAngle + 180) % 360) - 180;
+    if (lng < -180) lng += 360;
+
+    points.push({ lat, lng });
+  }
+  return points;
 }
 
 function toTrack(sat: SatelliteSummary): SatelliteTrack {
   const orbit = orbitType(sat.orbit_type);
   const altitude = Math.round(Number(sat.altitude_km) || (orbit === "GEO" ? 35786 : orbit === "MEO" ? 20200 : 550));
   const risk = Math.round(Number(sat.risk_score) || 0);
-  const position = catalogPosition(sat.norad_id);
 
   return {
     id: sat.norad_id,
     name: sat.object_name,
     orbit,
-    lat: position.lat,
-    lng: position.lng,
+    lat: 0, // computed dynamically
+    lng: 0,
     alt: altitude,
     velocity: orbit === "GEO" ? "3.07 km/s" : orbit === "MEO" ? "3.90 km/s" : "7.50 km/s",
     risk,
@@ -82,11 +160,44 @@ export default function MissionControlPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [timeMs, setTimeMs] = useState(0);
 
-  const selectedSat = useMemo(
-    () => satellites.find((s) => s.id === selectedId) ?? satellites[0] ?? null,
-    [satellites, selectedId],
-  );
+  useEffect(() => {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      setTimeMs(Date.now() - start);
+    }, 60);
+    return () => clearInterval(interval);
+  }, []);
+
+  const selectedSat = useMemo(() => {
+    const sat = satellites.find((s) => s.id === selectedId) ?? satellites[0] ?? null;
+    if (!sat) return null;
+    const pos = propagateOrbit(sat.id, sat.alt, sat.orbit, timeMs);
+    return {
+      ...sat,
+      lat: pos.lat,
+      lng: pos.lng,
+      velocity: `${pos.vel.toFixed(2)} km/s`,
+    };
+  }, [satellites, selectedId, timeMs]);
+
+  const propagatedSatellites = useMemo(() => {
+    return satellites.map((sat) => {
+      const pos = propagateOrbit(sat.id, sat.alt, sat.orbit, timeMs);
+      return {
+        ...sat,
+        lat: pos.lat,
+        lng: pos.lng,
+      };
+    });
+  }, [satellites, timeMs]);
+
+  const orbitPath = useMemo(() => {
+    const sat = satellites.find((s) => s.id === selectedId) ?? satellites[0] ?? null;
+    if (!sat) return undefined;
+    return generateOrbitPath(sat.id, sat.alt, sat.orbit, timeMs);
+  }, [satellites, selectedId, timeMs]);
 
   const filteredSatellites = useMemo(() => {
     if (!searchQuery.trim()) return satellites;
@@ -94,7 +205,7 @@ export default function MissionControlPage() {
     return satellites.filter(
       (s) => s.name.toLowerCase().includes(q) || String(s.id).includes(q),
     );
-  }, [searchQuery]);
+  }, [searchQuery, satellites]);
 
   useEffect(() => {
     let cancelled = false;
@@ -291,7 +402,7 @@ export default function MissionControlPage() {
       <div className="relative flex flex-1 flex-col">
         {/* Globe */}
         <div className="relative flex-1 overflow-hidden">
-          <GlobeWrapper satellites={satellites} selectedId={selectedId ?? 0} onSelect={handleSelect} />
+          <GlobeWrapper satellites={propagatedSatellites} selectedId={selectedId ?? 0} onSelect={handleSelect} orbitPath={orbitPath} />
         </div>
 
         {/* ── Telemetry strip ──────────────────────────────────────────── */}
