@@ -202,14 +202,46 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
     sunLight.position.set(-180, 120, 180);
     scene.add(sunLight);
 
+    // Strong backlit Sun light source behind the Earth for high-contrast rim lighting
+    const sunBackLight = new THREE.DirectionalLight(0xfff5db, 3.5);
+    sunBackLight.position.set(-100, 50, -250);
+    scene.add(sunBackLight);
+
     // Deep space ambient fill (soft blue-gray shadows)
     const ambientLight = new THREE.AmbientLight(0x0c1322, 0.85);
     scene.add(ambientLight);
 
+    // Inner sunlight corona glow (warm gold-white, radius of Earth is 100)
+    const glowGeom1 = new THREE.SphereGeometry(101.5, 32, 32);
+    const glowMat1 = new THREE.MeshBasicMaterial({
+      color: 0xfff3d1,
+      transparent: true,
+      opacity: 0.35,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+    });
+    const glowMesh1 = new THREE.Mesh(glowGeom1, glowMat1);
+    scene.add(glowMesh1);
+
+    // Outer atmospheric halo glow (cyan theme)
+    const glowGeom2 = new THREE.SphereGeometry(104.5, 32, 32);
+    const glowMat2 = new THREE.MeshBasicMaterial({
+      color: 0x4dd9f5,
+      transparent: true,
+      opacity: 0.18,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+    });
+    const glowMesh2 = new THREE.Mesh(glowGeom2, glowMat2);
+    scene.add(glowMesh2);
+
     return () => {
       if (moonRef.current) scene.remove(moonRef.current);
       scene.remove(sunLight);
+      scene.remove(sunBackLight);
       scene.remove(ambientLight);
+      scene.remove(glowMesh1);
+      scene.remove(glowMesh2);
     };
   }, []);
 
@@ -234,7 +266,7 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
     if (controls) {
       controls.autoRotate = true;
       controls.autoRotateSpeed = 0.15; // Slow, ambient rotation
-      controls.enableZoom = true;
+      controls.enableZoom = false; // Disable scroll-zooming so mouse wheel scrolls the page normally
       controls.minDistance = 150;
       controls.maxDistance = 500;
     }

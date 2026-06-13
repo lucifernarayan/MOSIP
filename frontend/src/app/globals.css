@@ -438,6 +438,23 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(77,217,245,0.18); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(77,217,245,0.32); }
 
+/* Primary page scrollbar styles */
+.main-scroll-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.main-scroll-container::-webkit-scrollbar-track {
+  background: rgba(8, 12, 18, 0.4);
+  border-left: 1px solid var(--c-border);
+}
+.main-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(77, 217, 245, 0.25);
+  border-radius: 4px;
+}
+.main-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(77, 217, 245, 0.5);
+}
+
 /* ── Range Input ────────────────────────────────────────────────────────────── */
 input[type="range"] { accent-color: var(--c-cyan); cursor: pointer; }
 

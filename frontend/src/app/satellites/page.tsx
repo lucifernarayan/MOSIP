@@ -83,6 +83,25 @@ function buildForecastData(assessment: AssessmentPayload | null) {
   return [];
 }
 
+function calculateVelocity(altitudeKm: number, orbitType: string): string {
+  if (!altitudeKm || altitudeKm <= 0) {
+    return orbitType === "GEO" ? "3.07 km/s" : orbitType === "MEO" ? "3.90 km/s" : "7.50 km/s";
+  }
+  const GM = 3.986004418e5;
+  const R_earth = 6371.0;
+  const a = R_earth + altitudeKm;
+  const vel = Math.sqrt(GM / a);
+  return `${vel.toFixed(2)} km/s`;
+}
+
+function getComplianceGrade(score: number): string {
+  if (score >= 90) return "A";
+  if (score >= 80) return "B";
+  if (score >= 70) return "C";
+  if (score >= 60) return "D";
+  return "F";
+}
+
 /* ── Agent Timeline Component ─────────────────────────────────────────────── */
 function AgentTimeline({ active }: { active: boolean }) {
   const [completedCount, setCompletedCount] = useState(0);
@@ -284,16 +303,16 @@ function SatelliteIntelContent() {
 
   const sat = selectedSat;
   const forecastData = buildForecastData(assessment);
-  const riskScore = Number(assessment?.collision_analysis?.risk_score) || 0;
-  const sustainabilityIndex = Number(assessment?.sustainability_analysis?.sustainability_index) || 0;
+  const riskScore = Number((assessment?.collision_analysis as any)?.overall?.risk_score) || 0;
+  const sustainabilityIndex = Number((assessment?.sustainability_analysis as any)?.sustainability_index) || 0;
 
   // 4 agent metric cards data
   const agentCards = assessment ? [
     {
       eyebrow: "Orbital Agent",
-      metric: `${(assessment.orbital_analysis?.altitude as number) || 0}`,
+      metric: `${((assessment.orbital_analysis as any)?.altitude_km as number) || 0}`,
       unit: "km",
-      detail: `${assessment.orbital_analysis?.regime || "LEO"} · ${assessment.orbital_analysis?.velocity || ""}`,
+      detail: `${(assessment.orbital_analysis as any)?.orbit_type || "LEO"} · ${calculateVelocity(Number((assessment.orbital_analysis as any)?.altitude_km), String((assessment.orbital_analysis as any)?.orbit_type))}`,
       spark: [320, 350, 330, 365, 380, 370, 390],
       color: "#00d4ff",
     },
@@ -301,15 +320,15 @@ function SatelliteIntelContent() {
       eyebrow: "Collision Agent",
       metric: `${riskScore}`,
       unit: "%",
-      detail: `Risk level: ${assessment.collision_analysis?.risk_level || "NOMINAL"}`,
+      detail: `Risk level: ${(assessment.collision_analysis as any)?.overall?.risk_level || "NOMINAL"}`,
       spark: [20, 35, 28, 45, 40, 55, riskScore],
       color: riskScore >= 75 ? "#ff3366" : riskScore >= 55 ? "#ffb700" : "#00ff9d",
     },
     {
       eyebrow: "Compliance Agent",
-      metric: `${assessment.compliance_analysis?.compliance_grade || "A"}`,
+      metric: `${getComplianceGrade(Number((assessment.compliance_analysis as any)?.compliance_score || 50))}`,
       unit: "",
-      detail: assessment.compliance_analysis?.status as string || "COMPLIANT",
+      detail: `${(assessment.compliance_analysis as any)?.compliance_level || "UNKNOWN"} (${(assessment.compliance_analysis as any)?.compliance_score || 50}/100)`,
       spark: [90, 85, 88, 82, 86, 80, 84],
       color: "#00d4ff",
     },
@@ -317,7 +336,7 @@ function SatelliteIntelContent() {
       eyebrow: "Sustainability Agent",
       metric: `${sustainabilityIndex}`,
       unit: "/100",
-      detail: `Burden: ${assessment.sustainability_analysis?.orbital_burden_score || 0}/100`,
+      detail: `Burden: ${(assessment.sustainability_analysis as any)?.environmental_burden || 0}/40`,
       spark: [80, 75, 78, 72, 70, 68, sustainabilityIndex || 70],
       color: "var(--c-nominal)",
     },
@@ -356,29 +375,31 @@ function SatelliteIntelContent() {
           )}
         </div>
 
-        <form onSubmit={handleSearchSubmit} className="flex gap-2">
-          <input
-            type="text"
-            placeholder="NORAD ID or name..."
-            value={noradId}
-            onChange={(e) => setNoradId(e.target.value)}
-            className="h-9 rounded border px-3 font-data text-[11px] outline-none w-[160px]"
-            style={{
-              background: "var(--c-surface-1)",
-              border: "1px solid var(--c-border-hi)",
-              color: "var(--t-primary)",
-              caretColor: "var(--c-cyan)",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary h-9 flex items-center gap-1.5 px-4 font-data text-[9px] uppercase tracking-widest disabled:opacity-40"
-          >
-            {loading ? <RefreshCw size={11} className="animate-spin" /> : <Play size={11} />}
-            ANALYZE
-          </button>
-        </form>
+        {assessment && (
+          <form onSubmit={handleSearchSubmit} className="flex gap-2">
+            <input
+              type="text"
+              placeholder="NORAD ID or name..."
+              value={noradId}
+              onChange={(e) => setNoradId(e.target.value)}
+              className="h-9 rounded border px-3 font-data text-[11px] outline-none w-[160px]"
+              style={{
+                background: "var(--c-surface-1)",
+                border: "1px solid var(--c-border-hi)",
+                color: "var(--t-primary)",
+                caretColor: "var(--c-cyan)",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary h-9 flex items-center gap-1.5 px-4 font-data text-[9px] uppercase tracking-widest disabled:opacity-40"
+            >
+              {loading ? <RefreshCw size={11} className="animate-spin" /> : <Play size={11} />}
+              ANALYZE
+            </button>
+          </form>
+        )}
       </header>
 
       {/* ── Loading state ───────────────────────────────────────────── */}
@@ -430,6 +451,100 @@ function SatelliteIntelContent() {
           <div>
             <h3 className="font-semibold text-[#ff3366] uppercase tracking-wider text-xs">Assessment Ingestion Fault</h3>
             <p className="text-xs text-slate-400 mt-0.5">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Landing State when no satellite assessed yet ── */}
+      {!loading && !assessment && (
+        <div 
+          className="flex-1 flex flex-col items-center justify-center min-h-[520px] rounded relative overflow-hidden border border-white/[0.04] shadow-2xl"
+          style={{
+            backgroundImage: "url('/collision_evasion.png')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          {/* Dark cinematic filter for text readability */}
+          <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#080c12]/98 via-[#080c12]/80 to-[#080c12]/98" />
+          
+          {/* Futuristic grid */}
+          <div className="cyber-grid absolute inset-0 opacity-10 z-0 pointer-events-none" />
+
+          {/* Glowing central halo representing planet edge/shine behind content */}
+          <div 
+            className="absolute rounded-full pointer-events-none z-0 filter blur-[100px]"
+            style={{
+              width: "480px",
+              height: "480px",
+              background: "radial-gradient(circle, rgba(77,217,245,0.08) 0%, transparent 70%)",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+            }}
+          />
+
+          <div className="relative z-10 max-w-xl w-full px-6 text-center flex flex-col items-center gap-6">
+            <div className="flex flex-col gap-2">
+              <span className="font-data text-[8px] uppercase tracking-[0.35em] text-[var(--c-cyan)]">
+                ORBITAL ASSESSMENT CORRIDOR
+              </span>
+              <h2 className="font-display text-3xl md:text-4xl uppercase tracking-wider text-white font-bold leading-tight">
+                Multi-Agent<br/>Satellite Synthesis
+              </h2>
+              <p className="text-[11px] text-slate-400 leading-relaxed max-w-md mx-auto mt-1">
+                Enter a catalog NORAD ID to dispatch the 8-agent sequential check swarm. The supervisor will compile live collision trajectory warnings, ESA/IADC regulatory compliant evidence, and calculate delta-v collision avoidance thrust briefs.
+              </p>
+            </div>
+
+            {/* Central console search bar */}
+            <form onSubmit={handleSearchSubmit} className="w-full max-w-md flex gap-2">
+              <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded border border-white/10 bg-slate-950/70 backdrop-blur-md focus-within:border-[var(--c-cyan)] transition-all">
+                <input
+                  type="text"
+                  placeholder="Enter NORAD ID (e.g. 25544 for ISS)..."
+                  value={noradId}
+                  onChange={(e) => setNoradId(e.target.value)}
+                  className="w-full bg-transparent font-data text-xs outline-none placeholder:text-slate-500"
+                  style={{ color: "#fff", caretColor: "var(--c-cyan)" }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary flex items-center gap-2 px-5 font-data text-xs uppercase tracking-widest disabled:opacity-40"
+              >
+                {loading ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} />}
+                ANALYZE
+              </button>
+            </form>
+
+            {/* Suggested Shortcuts */}
+            <div className="flex flex-col items-center gap-2 mt-4">
+              <span className="font-data text-[7px] uppercase tracking-[0.25em] text-slate-500">
+                OR SELECT ACTIVE NORAD TARGET
+              </span>
+              <div className="flex flex-wrap gap-2 justify-center max-w-md">
+                {[
+                  { name: "ISS", id: "25544" },
+                  { name: "CALSPHERE 1", id: "900" },
+                  { name: "LAGEOS", id: "8820" },
+                  { name: "STARLINK-1007", id: "44713" },
+                ].map((shortcut) => (
+                  <button
+                    key={shortcut.id}
+                    type="button"
+                    onClick={() => {
+                      setNoradId(shortcut.id);
+                      runAssessment(shortcut.id);
+                    }}
+                    className="px-3 py-1 rounded border border-white/[0.04] bg-white/[0.02] hover:bg-[var(--c-cyan-ghost)] hover:border-[var(--c-cyan)] text-slate-400 hover:text-white font-data text-[9px] uppercase tracking-wider transition-all"
+                  >
+                    {shortcut.name} · {shortcut.id}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -523,11 +638,11 @@ function SatelliteIntelContent() {
                           <p className="eyebrow mb-2">Space Density Matrix</p>
                           <div className="flex justify-between py-1.5 border-b border-white/[0.05]">
                             <span className="text-slate-400">Debris Density Score</span>
-                            <span className="text-white">{assessment.collision_analysis?.debris_density_score as number || 0}/100</span>
+                            <span className="text-white">{(assessment.collision_analysis as any)?.components?.debris_risk?.score as number || 0}/30</span>
                           </div>
                           <div className="flex justify-between py-1.5">
-                            <span className="text-slate-400">Conjunction Frequency</span>
-                            <span className="text-white">{assessment.collision_analysis?.conjunction_frequency as string || "N/A"}</span>
+                            <span className="text-slate-400">Objects in Orbit Shell</span>
+                            <span className="text-white">{(assessment.collision_analysis as any)?.congestion_context?.objects_in_shell as number || 0}</span>
                           </div>
                         </div>
                       </div>
@@ -540,20 +655,20 @@ function SatelliteIntelContent() {
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold uppercase tracking-wider text-white">Regulatory Compliance</h3>
                         <span className="font-digital text-2xl font-bold text-[#00d4ff]">
-                          {assessment.compliance_analysis?.compliance_grade as string || "A"}
+                          {getComplianceGrade(Number(assessment.compliance_analysis?.compliance_score || 50))}
                         </span>
                       </div>
                       <div className="border-l-2 border-[#00d4ff]/20 pl-4 py-1 text-xs text-slate-300 leading-relaxed">
-                        {assessment.compliance_analysis?.reasoning as string}
+                        {assessment.compliance_analysis?.compliance_summary as string}
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        {((assessment.compliance_analysis?.violations as string[]) || []).length === 0 ? (
+                        {((assessment.compliance_analysis?.failed_requirements as string[]) || []).length === 0 ? (
                           <div className="flex items-center gap-2 text-xs text-[#00ff9d] bg-[#00ff9d]/05 border border-[#00ff9d]/10 p-2.5 rounded-lg">
                             <ShieldCheck size={13} />
                             Zero safety or deorbit regulatory infractions detected.
                           </div>
                         ) : (
-                          ((assessment.compliance_analysis?.violations as string[]) || []).map((v, i) => (
+                          ((assessment.compliance_analysis?.failed_requirements as string[]) || []).map((v, i) => (
                             <div key={i} className="flex items-start gap-2 text-xs text-[#ff3366] bg-[#ff3366]/05 border border-[#ff3366]/15 p-2.5 rounded-lg">
                               <ShieldAlert size={13} className="mt-0.5 shrink-0" />
                               {v}
@@ -571,8 +686,8 @@ function SatelliteIntelContent() {
                       <div className="grid grid-cols-3 gap-3 font-digital">
                         {[
                           { label: "Sustainability Index", value: `${assessment.sustainability_analysis?.sustainability_index || 0}/100`, color: "#00ff9d" },
-                          { label: "Environmental Burden", value: `${assessment.sustainability_analysis?.orbital_burden_score || 0}/100`, color: "#00d4ff" },
-                          { label: "Space Occupancy", value: assessment.sustainability_analysis?.operational_footprint as string || "N/A", color: "#ffb700" },
+                          { label: "Environmental Burden", value: `${assessment.sustainability_analysis?.environmental_burden || 0}/40`, color: "#00d4ff" },
+                          { label: "Orbital Footprint", value: `${assessment.sustainability_analysis?.orbital_footprint_score || 0}/40`, color: "#ffb700" },
                         ].map((m) => (
                           <div key={m.label} className="cyber-panel p-3 text-center">
                             <span className="block text-[8px] uppercase text-slate-500 mb-1">{m.label}</span>
@@ -581,7 +696,7 @@ function SatelliteIntelContent() {
                         ))}
                       </div>
                       <p className="text-[11px] text-slate-400 leading-relaxed border border-white/[0.04] bg-white/[0.01] p-3 rounded-lg">
-                        Cross-sectional area of {assessment.sustainability_analysis?.cross_section_sqm as number || 0} m² weighed against orbital lifetime and local shell population. Lower values indicate elevated cascade collision potential.
+                        Local congestion shell of {assessment.sustainability_analysis?.congestion_contribution as number || 0} objects weighed against orbital lifetime and local congestion parameters. Lower index indicates elevated cascade collision potential.
                       </p>
                     </div>
                   )}
@@ -644,14 +759,14 @@ function SatelliteIntelContent() {
                 <div className="flex flex-col gap-3 font-digital text-xs">
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { label: "Operator", value: assessment.satellite?.operator as string || "N/A" },
-                      { label: "Regime", value: assessment.orbital_analysis?.regime as string || "N/A" },
-                      { label: "Altitude", value: `${assessment.orbital_analysis?.altitude as number || 0} km`, className: "text-[#00d4ff]" },
-                      { label: "Velocity", value: assessment.orbital_analysis?.velocity as string || "N/A", className: "text-[#00d4ff]" },
-                      { label: "Apogee", value: `${assessment.orbital_analysis?.apogee as number || 0} km` },
-                      { label: "Perigee", value: `${assessment.orbital_analysis?.perigee as number || 0} km` },
-                      { label: "Inclination", value: `${assessment.satellite?.inclination_deg as number || 0}°` },
-                      { label: "Period", value: `${assessment.orbital_analysis?.period_min as number || 0} min` },
+                      { label: "Operator", value: assessment.satellite?.object_id as string || "Catalogued" },
+                      { label: "Regime", value: assessment.orbital_analysis?.orbit_type as string || "N/A" },
+                      { label: "Altitude", value: `${assessment.orbital_analysis?.altitude_km as number || 0} km`, className: "text-[#00d4ff]" },
+                      { label: "Velocity", value: calculateVelocity(Number(assessment.orbital_analysis?.altitude_km), String(assessment.orbital_analysis?.orbit_type)), className: "text-[#00d4ff]" },
+                      { label: "Apogee", value: `${assessment.orbital_analysis?.apogee_km as number || 0} km` },
+                      { label: "Perigee", value: `${assessment.orbital_analysis?.perigee_km as number || 0} km` },
+                      { label: "Inclination", value: `${assessment.orbital_analysis?.inclination_deg as number || 0}°` },
+                      { label: "Period", value: `${assessment.orbital_analysis?.period_minutes as number || 0} min` },
                     ].map((f) => (
                       <div key={f.label}>
                         <span className="block text-[8px] uppercase text-slate-500">{f.label}</span>

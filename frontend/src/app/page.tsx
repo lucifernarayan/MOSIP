@@ -265,7 +265,7 @@ export default function MissionControlPage() {
     : "var(--c-nominal)";
 
   return (
-    <div className="relative w-full overflow-y-auto" style={{ background: "#000", height: "calc(100vh - var(--topbar-h))" }}>
+    <div className="relative w-full overflow-y-auto main-scroll-container" style={{ background: "#000", height: "calc(100vh - var(--topbar-h))" }}>
 
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 1 — HERO VIEWPORT (60% Space Visor, 40% Control HUD Console)
@@ -532,210 +532,225 @@ export default function MissionControlPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 2 — DEBRIS ANALYSIS & PROBLEM RESOLUTION (Scrollable)
+          SECTION 2 — DEBRIS MITIGATION SECTION (Slide 2: Full Screen Visual)
           ═══════════════════════════════════════════════════════════════════ */}
       <div 
-        className="relative z-20 w-full px-8 py-16"
+        className="relative w-full h-screen overflow-hidden flex items-center justify-between shrink-0"
         style={{ 
-          background: "radial-gradient(circle at top, #0b111a 0%, #080c12 100%)",
+          backgroundImage: "url('/debris_orbit.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
           borderTop: "1px solid var(--c-border)",
         }}
       >
-        <div className="cyber-grid absolute inset-0 opacity-15 pointer-events-none" />
+        {/* Dark Cinematic overlay gradient (85% black on left to fade into space visual on right) */}
+        <div className="absolute inset-0 z-10" style={{ background: "linear-gradient(to right, rgba(8,12,18,0.96) 45%, rgba(8,12,18,0.4) 100%)" }} />
+        
+        {/* Space Grid overlay */}
+        <div className="cyber-grid absolute inset-0 opacity-10 z-12 pointer-events-none" />
 
-        <div className="relative max-w-5xl mx-auto flex flex-col gap-14">
-          
-          {/* Header */}
-          <div className="flex flex-col gap-2 border-l-2 border-[var(--c-cyan)] pl-4">
-            <span className="font-data text-[9px] uppercase tracking-[0.35em]" style={{ color: "var(--c-cyan)" }}>
-              SECURE DEBRIS BRIEFING // KESSLER SYNDROME MATRIX
+        <div className="relative z-20 max-w-5xl mx-auto w-full px-8 md:px-12 flex flex-col md:flex-row items-center justify-between gap-12">
+          {/* Slide Text Block */}
+          <div className="flex flex-col gap-5 max-w-md">
+            <span className="font-data text-[9px] uppercase tracking-[0.35em] text-[var(--c-cyan)]">
+              MISSION THREAT // KESSLER SHELL DESTRUCTION
             </span>
-            <h2 className="font-display text-3xl uppercase tracking-wider text-white">
-              The Orbital Debris Crisis
+            <h2 className="font-display text-4xl md:text-5xl uppercase tracking-wider text-white leading-tight font-bold">
+              Cleaning Up<br/>The Orbit
             </h2>
-            <p className="text-[13px] leading-relaxed text-[var(--t-secondary)] max-w-2xl">
-              Low Earth Orbit (LEO) is experiencing exponential congestion. Over six decades of spaceflight have accumulated 
-              millions of high-velocity debris particles. Today, MOSIP is monitoring 
-              <span className="text-[var(--c-cyan)] font-semibold"> {satellites.length ? satellites.length : 15680}+ cataloged objects </span>
-              in real-time to prevent collision events and sustain operational access to space.
+            <p className="text-[13px] leading-relaxed text-slate-300">
+              Low Earth Orbit (LEO) is cluttered with defunct payloads and cascading kinetic fragments traveling at speeds exceeding 7.5 km/s. MOSIP ingests raw telemetry to catalog conjunction risks, helping agencies visualize active orbital footprints before debris collisions occur.
             </p>
-          </div>
-
-          {/* Infographics cards grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* Card 1: Debris Distribution */}
-            <div 
-              className="p-5 rounded"
-              style={{ background: "var(--c-surface-0)", border: "1px solid var(--c-border)" }}
-            >
-              <span className="label block mb-2">ORBIT REGIME DISTRIBUTION</span>
-              <h3 className="font-display text-md uppercase tracking-wide text-white mb-4">LEO Congestion Profile</h3>
-              
-              <div className="flex flex-col gap-3">
-                {[
-                  { regime: "Debris & Defunct Satellites", percent: 68, count: "10,660 objs", color: "var(--c-critical)" },
-                  { regime: "Active Satellites", percent: 21, count: "3,290 objs", color: "var(--c-cyan)" },
-                  { regime: "MEO & GEO Regimes", percent: 11, count: "1,730 objs", color: "var(--c-nominal)" }
-                ].map(r => (
-                  <div key={r.regime} className="flex flex-col gap-1">
-                    <div className="flex justify-between font-data text-[9px]">
-                      <span style={{ color: "rgba(255,255,255,0.6)" }}>{r.regime}</span>
-                      <span className="font-bold" style={{ color: r.color }}>{r.count}</span>
-                    </div>
-                    <div className="risk-bar-track">
-                      <div className="risk-bar-fill" style={{ width: `${r.percent}%`, background: r.color }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Card 2: Conjunction Probability */}
-            <div 
-              className="p-5 rounded"
-              style={{ background: "var(--c-surface-0)", border: "1px solid var(--c-border)" }}
-            >
-              <span className="label block mb-2">THREAT INTELLIGENCE</span>
-              <h3 className="font-display text-md uppercase tracking-wide text-white mb-4">Collision & Conjunction Metrics</h3>
-              
-              <div className="flex items-center justify-between gap-4 py-2">
-                <div className="flex flex-col">
-                  <span className="font-data text-3xl font-bold text-[var(--c-critical)]">{(metrics?.critical_risk_count ?? 142)}</span>
-                  <span className="font-data text-[8px] uppercase tracking-wider text-[var(--t-meta)] mt-1">CRITICAL ALERTS</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-data text-3xl font-bold text-[var(--c-elevated)]">{(metrics?.average_risk_score ?? 48)}%</span>
-                  <span className="font-data text-[8px] uppercase tracking-wider text-[var(--t-meta)] mt-1">AVG INDEX RISK</span>
-                </div>
-              </div>
-              
-              <div className="mt-4 pt-3 border-t border-white/5 flex flex-col gap-1 text-[10px] text-[var(--t-secondary)] leading-normal">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--c-critical)] animate-ping" />
-                  <span>ALERT: Closest approach distances &lt; 50 meters detected.</span>
-                </div>
-                <span>Evasion protocols and orbital maneuver calculations have been initialized.</span>
-              </div>
-            </div>
-
-            {/* Card 3: Regulatory Compliance */}
-            <div 
-              className="p-5 rounded"
-              style={{ background: "var(--c-surface-0)", border: "1px solid var(--c-border)" }}
-            >
-              <span className="label block mb-2">MITIGATION POLICIES</span>
-              <h3 className="font-display text-md uppercase tracking-wide text-white mb-4">ESA & IADC Audits</h3>
-              
-              <div className="flex flex-col gap-3">
-                <div className="flex justify-between items-center">
-                  <span className="font-data text-[10px] text-[var(--t-secondary)]">25-Year Disposal Rule</span>
-                  <span className="status-tag critical">42% AUDIT FAIL</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-data text-[10px] text-[var(--t-secondary)]">Kinetic Fragmentation Index</span>
-                  <span className="status-tag watch">ELEVATED Burden</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-data text-[10px] text-[var(--t-secondary)]">De-orbit Energy Margins</span>
-                  <span className="status-tag nominal">92% COMPLIANT</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section: How MOSIP Resolves It */}
-          <div className="flex flex-col gap-6 mt-4">
-            <div className="flex flex-col gap-1">
-              <span className="font-data text-[9px] uppercase tracking-[0.35em]" style={{ color: "var(--c-ai)" }}>
-                DISTRIBUTED MULTI-AGENT ARCHITECTURE
-              </span>
-              <h3 className="font-display text-2xl uppercase tracking-wider text-white">
-                How MOSIP Solves The Crisis
-              </h3>
-              <p className="text-[13px] leading-relaxed text-[var(--t-secondary)] max-w-2xl">
-                MOSIP orchestrates a network of **eight specialized autonomous agents** backed by PostgreSQL catalog data, 
-                Qdrant policy vector search, and a Groq LLM reasoning layer to solve orbital debris problems in real-time.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[
-                {
-                  title: "1. Surveillance & Conjunction Projection",
-                  desc: "The Surveillance Agent continuously monitors NORAD telemetry. When orbits intersect, the Risk Agent runs conjunction Monte Carlo simulations to project collision probability.",
-                  icon: Cpu,
-                  color: "var(--c-cyan)",
-                  ghostColor: "var(--c-cyan-ghost)"
-                },
-                {
-                  title: "2. Policy Compliance & Burden Scoring",
-                  desc: "Using vector search in Qdrant, the Policy Agent checks satellite operational histories against ESA and IADC debris mitigation regulations. The Sustainability Agent scores long-term orbital burden.",
-                  icon: Zap,
-                  color: "var(--c-ai)",
-                  ghostColor: "var(--c-ai-ghost)"
-                },
-                {
-                  title: "3. Autonomous Evasion Maneuvers",
-                  desc: "In critical risk scenarios, the Maneuver Agent designs immediate delta-v evasion trajectories. The Groq LLM synthesizes these into natural-language command briefs for flight controllers.",
-                  icon: AlertTriangle,
-                  color: "var(--c-nominal)",
-                  ghostColor: "rgba(61,232,155,0.06)"
-                }
-              ].map(agent => {
-                const Icon = agent.icon;
-                return (
-                  <div 
-                    key={agent.title}
-                    className="p-5 rounded flex flex-col gap-3 relative overflow-hidden"
-                    style={{ 
-                      background: "var(--c-surface-0)", 
-                      border: "1px solid var(--c-border)",
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-sm" style={{ background: agent.ghostColor }}>
-                        <Icon size={16} style={{ color: agent.color }} />
-                      </div>
-                      <h4 className="font-display text-[14px] uppercase tracking-wider text-white">{agent.title}</h4>
-                    </div>
-                    <p className="text-[11px] leading-relaxed text-[var(--t-secondary)]">
-                      {agent.desc}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Return Call to Action */}
-            <div 
-              className="p-6 rounded flex flex-col md:flex-row items-center justify-between gap-6 mt-4"
-              style={{ 
-                background: "rgba(167,139,250,0.04)", 
-                border: "1px solid rgba(167,139,250,0.18)",
-                borderRadius: "var(--border-r)"
-              }}
-            >
-              <div className="flex flex-col gap-1 text-center md:text-left">
-                <span className="font-data text-[8px] uppercase tracking-[0.3em] text-[var(--c-ai)]">Orchestrator Interface Ready</span>
-                <span className="font-display text-[15px] uppercase tracking-wide text-white font-semibold">Active Assessment Environment</span>
-                <span className="text-[11px] text-[var(--t-secondary)]">Select any satellite in the catalog drawer above and click "Initiate Assessment" to trigger the multi-agent chain.</span>
-              </div>
+            <div className="pt-2">
               <button 
                 onClick={() => {
-                  window.scrollTo({ top: 0, behavior: "smooth" });
+                  const el = document.querySelector(".relative.w-full.flex.overflow-hidden.shrink-0");
+                  el?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className="btn-primary h-8 px-6 flex items-center justify-center gap-2 shrink-0 font-data text-[9px]"
-                style={{
-                  background: "rgba(167,139,250,0.08)",
-                  border: "1px solid var(--c-ai)",
-                  color: "var(--c-ai)"
-                }}
+                className="border border-white hover:bg-white hover:text-black text-white font-data text-[10px] px-6 py-3 transition uppercase tracking-widest rounded-sm"
               >
-                Return to Command Deck
+                EXPLORE CATALOGUE →
               </button>
             </div>
+          </div>
 
+          {/* Slide Glassmorphism Data Overlay */}
+          <div 
+            className="p-5 rounded-sm max-w-sm w-full backdrop-blur-md border border-white/[0.06] flex flex-col gap-4"
+            style={{ background: "rgba(11,15,23,0.7)" }}
+          >
+            <span className="label block border-b border-white/[0.04] pb-2">CONGESTION READOUTS</span>
+            
+            <div className="flex flex-col gap-3">
+              {[
+                { regime: "Debris & Defunct Satellites", percent: 68, count: "10,660 objs", color: "var(--c-critical)" },
+                { regime: "Active Satellites", percent: 21, count: "3,290 objs", color: "var(--c-cyan)" },
+                { regime: "MEO & GEO Regimes", percent: 11, count: "1,730 objs", color: "var(--c-nominal)" }
+              ].map(r => (
+                <div key={r.regime} className="flex flex-col gap-1">
+                  <div className="flex justify-between font-data text-[9px]">
+                    <span style={{ color: "rgba(255,255,255,0.7)" }}>{r.regime}</span>
+                    <span className="font-bold" style={{ color: r.color }}>{r.count}</span>
+                  </div>
+                  <div className="risk-bar-track">
+                    <div className="risk-bar-fill" style={{ width: `${r.percent}%`, background: r.color }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 3 — REGULATORY COMPLIANCE SECTION (Slide 3: Rocket Visual)
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div 
+        className="relative w-full h-screen overflow-hidden flex items-center justify-between shrink-0"
+        style={{ 
+          backgroundImage: "url('/orbital_compliance.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          borderTop: "1px solid var(--c-border)",
+        }}
+      >
+        {/* Dark Cinematic overlay gradient (85% black on right to fade into launch visual on left) */}
+        <div className="absolute inset-0 z-10" style={{ background: "linear-gradient(to left, rgba(8,12,18,0.96) 45%, rgba(8,12,18,0.4) 100%)" }} />
+        
+        <div className="cyber-grid absolute inset-0 opacity-10 z-12 pointer-events-none" />
+
+        <div className="relative z-20 max-w-5xl mx-auto w-full px-8 md:px-12 flex flex-col md:flex-row items-center justify-between gap-12">
+          
+          {/* Slide Glassmorphism Data Overlay */}
+          <div 
+            className="p-5 rounded-sm max-w-sm w-full backdrop-blur-md border border-white/[0.06] flex flex-col gap-4 md:order-first order-last"
+            style={{ background: "rgba(11,15,23,0.7)" }}
+          >
+            <span className="label block border-b border-white/[0.04] pb-2">POLICY AUDITS</span>
+            
+            <div className="flex flex-col gap-3 font-digital text-xs">
+              <div className="flex justify-between items-center py-1">
+                <span className="text-slate-300 font-data text-[10px]">25-Year Disposal Rule</span>
+                <span className="status-tag critical">42% AUDIT FAIL</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-slate-300 font-data text-[10px]">Kinetic Fragmentation Index</span>
+                <span className="status-tag watch">ELEVATED BURDEN</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-slate-300 font-data text-[10px]">De-orbit Energy Margins</span>
+                <span className="status-tag nominal">92% COMPLIANT</span>
+              </div>
+            </div>
+            
+            <div className="text-[10px] text-slate-400 border-t border-white/[0.04] pt-2 leading-relaxed">
+              All telemetry is validated against IADC space debris mitigation guidelines in real-time.
+            </div>
+          </div>
+
+          {/* Slide Text Block */}
+          <div className="flex flex-col gap-5 max-w-md">
+            <span className="font-data text-[9px] uppercase tracking-[0.35em] text-[var(--c-ai)]">
+              POLICY COMPLIANCE // COGNITIVE LAW AUDITOR
+            </span>
+            <h2 className="font-display text-4xl md:text-5xl uppercase tracking-wider text-white leading-tight font-bold">
+              Enforcing<br/>Orbital Law
+            </h2>
+            <p className="text-[13px] leading-relaxed text-slate-300">
+              Launching payloads demands adherence to safety treaties. MOSIP checks every cataloged trajectory against IADC and ESA orbital guidelines using vector semantic lookup in Qdrant, highlighting compliance grade violations instantly.
+            </p>
+            <div className="pt-2">
+              <button 
+                onClick={() => router.push("/regulations")}
+                className="border border-white hover:bg-white hover:text-black text-white font-data text-[10px] px-6 py-3 transition uppercase tracking-widest rounded-sm"
+              >
+                QUERY POLICY BASE →
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 4 — AUTOMATED AVOIDANCE SECTION (Slide 4: Thruster Visual)
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div 
+        className="relative w-full h-screen overflow-hidden flex items-center justify-between shrink-0"
+        style={{ 
+          backgroundImage: "url('/collision_evasion.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          borderTop: "1px solid var(--c-border)",
+        }}
+      >
+        {/* Dark Cinematic overlay gradient (85% black on left to fade into visual on right) */}
+        <div className="absolute inset-0 z-10" style={{ background: "linear-gradient(to right, rgba(8,12,18,0.96) 45%, rgba(8,12,18,0.4) 100%)" }} />
+        
+        <div className="cyber-grid absolute inset-0 opacity-10 z-12 pointer-events-none" />
+
+        <div className="relative z-20 max-w-5xl mx-auto w-full px-8 md:px-12 flex flex-col md:flex-row items-center justify-between gap-12">
+          {/* Slide Text Block */}
+          <div className="flex flex-col gap-5 max-w-md">
+            <span className="font-data text-[9px] uppercase tracking-[0.35em] text-[var(--c-nominal)]">
+              AUTONOMOUS NAVIGATION // EVASION THRESHOLD
+            </span>
+            <h2 className="font-display text-4xl md:text-5xl uppercase tracking-wider text-white leading-tight font-bold">
+              Autonomous<br/>Evasion Maneuvers
+            </h2>
+            <p className="text-[13px] leading-relaxed text-slate-300">
+              When threat indexes exceed safe parameters, MOSIP calculates precise thruster impulses (delta-v values) to guide satellites into safe orbits. The maneuver coordinates are structured by our autonomous agents and generated as executive command briefings using Groq LLM.
+            </p>
+            <div className="pt-2">
+              <button 
+                onClick={() => router.push("/simulator")}
+                className="border border-white hover:bg-white hover:text-black text-white font-data text-[10px] px-6 py-3 transition uppercase tracking-widest rounded-sm"
+              >
+                RUN SIMULATIONS →
+              </button>
+            </div>
+          </div>
+
+          {/* Slide Glassmorphism Data Overlay */}
+          <div 
+            className="p-5 rounded-sm max-w-sm w-full backdrop-blur-md border border-white/[0.06] flex flex-col gap-4"
+            style={{ background: "rgba(11,15,23,0.7)" }}
+          >
+            <span className="label block border-b border-white/[0.04] pb-2">MULTI-AGENT CHAIN STATUS</span>
+            
+            <div className="flex flex-col gap-3 font-digital text-[11px]">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded bg-[var(--c-cyan-ghost)]">
+                  <Cpu size={12} className="text-[var(--c-cyan)]" />
+                </div>
+                <div className="flex-1">
+                  <span className="block font-semibold text-white">Surveillance & Risk</span>
+                  <span className="text-[8px] text-slate-400">Monte Carlo conjunction assessment</span>
+                </div>
+                <span className="status-tag nominal text-[7px]">OK</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded bg-[var(--c-ai-ghost)]">
+                  <Zap size={12} className="text-[var(--c-ai)]" />
+                </div>
+                <div className="flex-1">
+                  <span className="block font-semibold text-white">Policy & Compliance</span>
+                  <span className="text-[8px] text-slate-400">ESA/IADC policy vector query</span>
+                </div>
+                <span className="status-tag ai text-[7px]">OK</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded bg-emerald-500/10">
+                  <AlertTriangle size={12} className="text-[var(--c-nominal)]" />
+                </div>
+                <div className="flex-1">
+                  <span className="block font-semibold text-white">Maneuver & Avoidance</span>
+                  <span className="text-[8px] text-slate-400">Delta-v propulsion trajectory computation</span>
+                </div>
+                <span className="status-tag nominal text-[7px]">ACTIVE</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
