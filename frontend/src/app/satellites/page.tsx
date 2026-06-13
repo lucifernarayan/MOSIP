@@ -102,17 +102,21 @@ function AgentTimeline({ active }: { active: boolean }) {
   }, [active]);
 
   return (
-    <div className="cyber-panel p-5">
+    <div
+      className="rounded overflow-hidden"
+      style={{ background: "var(--c-surface-0)", border: "1px solid var(--c-border)", padding: "16px" }}
+    >
       <div className="mb-4">
-        <span className="eyebrow block mb-1">LangGraph Agent Pipeline</span>
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
-          8-Agent Sequential Execution
+        <span className="label block mb-0.5">LANGGRAPH PIPELINE</span>
+        <h3 className="font-display text-[11px] uppercase tracking-wider" style={{ color: "var(--t-primary)" }}>
+          8-AGENT SEQUENTIAL EXECUTION
         </h3>
       </div>
       <div className="flex items-center overflow-x-auto pb-2">
         {agentTimeline.map((agent, i) => {
           const Icon = agentIcons[i];
           const done = completedCount > i;
+          const active_node = active && completedCount === i;
           return (
             <div key={agent.name} className="flex items-center shrink-0">
               <motion.div
@@ -122,31 +126,43 @@ function AgentTimeline({ active }: { active: boolean }) {
                 transition={{ delay: i * 0.35, duration: 0.3 }}
               >
                 <div
-                  className="relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-500"
+                  className="relative flex h-9 w-9 items-center justify-center rounded-full transition-all duration-500"
                   style={{
-                    borderColor: done ? "#00ff9d" : active && completedCount === i ? "#00d4ff" : "rgba(255,255,255,0.1)",
-                    background: done ? "rgba(0,255,157,0.08)" : active && completedCount === i ? "rgba(0,212,255,0.08)" : "rgba(255,255,255,0.02)",
-                    boxShadow: done ? "0 0 12px rgba(0,255,157,0.2)" : active && completedCount === i ? "0 0 12px rgba(0,212,255,0.2)" : "none",
+                    border: `1px solid ${done ? "var(--c-nominal)" : active_node ? "var(--c-cyan)" : "rgba(255,255,255,0.1)"}`,
+                    background: done ? "rgba(61,232,155,0.07)" : active_node ? "var(--c-cyan-ghost)" : "rgba(255,255,255,0.02)",
+                    boxShadow: done ? "0 0 8px rgba(61,232,155,0.18)" : active_node ? "0 0 8px rgba(77,217,245,0.15)" : "none",
                   }}
                 >
-                  <Icon size={15} className={done ? "text-[#00ff9d]" : completedCount === i ? "text-[#00d4ff]" : "text-slate-600"} />
+                  <Icon
+                    size={13}
+                    style={{
+                      color: done ? "var(--c-nominal)" : active_node ? "var(--c-cyan)" : "var(--t-meta)",
+                    }}
+                  />
                   {done && (
                     <motion.div
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#00ff9d]"
+                      className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full"
+                      style={{ background: "var(--c-nominal)" }}
                     >
-                      <CheckCircle size={9} className="text-black" />
+                      <CheckCircle size={8} style={{ color: "#040508" }} />
                     </motion.div>
                   )}
                 </div>
-                <span className="font-digital text-[8px] uppercase tracking-wider text-center text-slate-500 max-w-[52px] leading-tight">
+                <span
+                  className="font-data text-[7px] uppercase tracking-wider text-center max-w-[44px] leading-tight"
+                  style={{ color: done ? "var(--t-secondary)" : "var(--t-meta)" }}
+                >
                   {agent.name}
                 </span>
-                <span className="font-digital text-[7px] text-slate-600">{agent.latency}</span>
+                <span className="font-data text-[6px]" style={{ color: "var(--t-meta)" }}>{agent.latency}</span>
               </motion.div>
               {i < agentTimeline.length - 1 && (
-                <div className="mx-1 h-px w-8 shrink-0" style={{ background: done ? "rgba(0,255,157,0.3)" : "rgba(255,255,255,0.06)" }} />
+                <div
+                  className="mx-1 h-px w-6 shrink-0"
+                  style={{ background: done ? "rgba(61,232,155,0.25)" : "var(--c-border)" }}
+                />
               )}
             </div>
           );
@@ -155,6 +171,8 @@ function AgentTimeline({ active }: { active: boolean }) {
     </div>
   );
 }
+
+
 
 /* ── Sparkline ────────────────────────────────────────────────────────────── */
 function Sparkline({ data, color }: { data: number[]; color: string }) {
@@ -301,34 +319,39 @@ function SatelliteIntelContent() {
       unit: "/100",
       detail: `Burden: ${assessment.sustainability_analysis?.orbital_burden_score || 0}/100`,
       spark: [80, 75, 78, 72, 70, 68, sustainabilityIndex || 70],
-      color: "#00ff9d",
+      color: "var(--c-nominal)",
     },
   ] : [];
 
+
+
   return (
-    <div className="flex flex-col gap-5 p-5 lg:p-7 cyber-grid min-h-full">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="flex flex-col justify-between gap-4 border-b border-white/[0.06] pb-5 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-5 p-5 lg:p-7 min-h-full" style={{ background: "var(--c-base)" }}>
+      {/* ── Header ────────────────────────────────────────────────────── */}
+      <header
+        className="flex flex-col justify-between gap-4 pb-4 sm:flex-row sm:items-center"
+        style={{ borderBottom: "1px solid var(--c-border)" }}
+      >
         <div>
-          <span className="eyebrow block mb-1">Multi-Agent Synthesis Engine</span>
-          <h1 className="text-2xl font-bold uppercase tracking-wider text-white">
+          <span className="label block mb-0.5">MULTI-AGENT SYNTHESIS ENGINE</span>
+          <h1 className="font-display text-xl uppercase tracking-[0.1em]" style={{ color: "var(--t-primary)" }}>
             {satelliteName(sat)}
           </h1>
           {sat && (
-            <div className="mt-2 flex items-center gap-2">
-              <span className="font-digital text-[10px] text-slate-500">NORAD {satelliteNorad(sat)}</span>
-              <span className="text-white/10">|</span>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="font-data text-[9px]" style={{ color: "var(--t-meta)" }}>NORAD {satelliteNorad(sat)}</span>
+              <span style={{ color: "var(--c-border-hi)" }}>·</span>
               <span
-                className="rounded-full border px-2 py-0.5 font-digital text-[9px] uppercase"
+                className="status-tag"
                 style={{
-                  borderColor: riskScore >= 75 ? "rgba(255,51,102,0.4)" : riskScore >= 55 ? "rgba(255,183,0,0.4)" : "rgba(0,212,255,0.3)",
-                  color: riskScore >= 75 ? "#ff3366" : riskScore >= 55 ? "#ffb700" : "#00d4ff",
-                  background: riskScore >= 75 ? "rgba(255,51,102,0.05)" : riskScore >= 55 ? "rgba(255,183,0,0.05)" : "rgba(0,212,255,0.05)",
+                  color: riskScore >= 75 ? "var(--c-critical)" : riskScore >= 55 ? "var(--c-elevated)" : "var(--c-nominal)",
+                  borderColor: riskScore >= 75 ? "rgba(239,67,67,0.25)" : riskScore >= 55 ? "rgba(245,166,35,0.25)" : "rgba(61,232,155,0.22)",
+                  background: riskScore >= 75 ? "rgba(239,67,67,0.06)" : riskScore >= 55 ? "rgba(245,166,35,0.06)" : "rgba(61,232,155,0.06)",
                 }}
               >
-                {riskScore >= 75 ? "⬛ CRITICAL" : riskScore >= 55 ? "⬛ ELEVATED" : "● NOMINAL"}
+                {riskScore >= 75 ? "CRITICAL" : riskScore >= 55 ? "ELEVATED" : "NOMINAL"}
               </span>
-              <span className="font-digital text-[9px] text-slate-500">{sat.object_id || "Catalogued"}</span>
+              <span className="font-data text-[9px]" style={{ color: "var(--t-meta)" }}>{sat.object_id || "CATALOGUED"}</span>
             </div>
           )}
         </div>
@@ -336,44 +359,71 @@ function SatelliteIntelContent() {
         <form onSubmit={handleSearchSubmit} className="flex gap-2">
           <input
             type="text"
-            placeholder="Enter NORAD ID..."
+            placeholder="NORAD ID or name..."
             value={noradId}
             onChange={(e) => setNoradId(e.target.value)}
-            className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2 font-digital text-xs text-white placeholder-slate-500 outline-none focus:border-[#00d4ff]/30 focus:bg-[#00d4ff]/[0.03] w-[170px]"
+            className="h-9 rounded border px-3 font-data text-[11px] outline-none w-[160px]"
+            style={{
+              background: "var(--c-surface-1)",
+              border: "1px solid var(--c-border-hi)",
+              color: "var(--t-primary)",
+              caretColor: "var(--c-cyan)",
+            }}
           />
           <button
             type="submit"
             disabled={loading}
-            className="flex items-center gap-1.5 rounded-lg bg-[#00d4ff]/10 border border-[#00d4ff]/25 px-4 py-2 font-digital text-xs uppercase font-semibold text-[#00d4ff] hover:bg-[#00d4ff]/20 transition disabled:opacity-40"
+            className="btn-primary h-9 flex items-center gap-1.5 px-4 font-data text-[9px] uppercase tracking-widest disabled:opacity-40"
           >
-            {loading ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />}
-            Analyze
+            {loading ? <RefreshCw size={11} className="animate-spin" /> : <Play size={11} />}
+            ANALYZE
           </button>
         </form>
       </header>
 
-      {/* ── Loading ─────────────────────────────────────────────────────────── */}
+      {/* ── Loading state ───────────────────────────────────────────── */}
       {loading && (
-        <div className="cyber-panel rounded-xl p-10 flex flex-col items-center justify-center min-h-[300px] relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,212,255,0.06),transparent_60%)]" />
-          <div className="relative z-10 flex flex-col items-center gap-4">
-            <div className="relative h-20 w-20">
-              <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#00d4ff]/20 animate-[spin_10s_linear_infinite]" />
-              <div className="absolute inset-3 rounded-full border border-[#00d4ff]/30 animate-pulse" />
+        <div
+          className="p-10 flex flex-col items-center justify-center min-h-[300px] relative overflow-hidden rounded"
+          style={{ background: "var(--c-surface-0)", border: "1px solid var(--c-border)" }}
+        >
+          <div className="relative z-10 flex flex-col items-center gap-5">
+            {/* Multi-ring orbital indicator */}
+            <div className="relative h-16 w-16">
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{ border: "1px solid rgba(77,217,245,0.15)", animation: "spin 12s linear infinite" }}
+              />
+              <div
+                className="absolute inset-2 rounded-full"
+                style={{ border: "1px solid rgba(77,217,245,0.3)", animation: "spin 8s linear infinite reverse" }}
+              />
               <div className="absolute inset-0 grid place-items-center">
-                <div className="h-2 w-2 rounded-full bg-[#00d4ff]" style={{ boxShadow: "0 0 12px #00d4ff" }} />
+                <div
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: "var(--c-cyan)", boxShadow: "0 0 8px var(--c-cyan)" }}
+                />
               </div>
             </div>
-            <p className="font-digital text-xs uppercase tracking-[0.25em] text-[#00d4ff]">Executing Multi-Agent Graph</p>
-            <p className="font-digital text-[10px] text-slate-400 text-center max-w-sm animate-pulse">{loadingStep}</p>
-            <div className="mt-2 w-52 h-0.5 bg-white/[0.04] rounded-full overflow-hidden">
-              <div className="h-full bg-[#00d4ff]/70 rounded-full" style={{ animation: "loading 9s ease-in-out forwards" }} />
+            <div className="flex flex-col items-center gap-1">
+              <p className="font-data text-[9px] uppercase tracking-[0.3em]" style={{ color: "var(--c-cyan)" }}>
+                EXECUTING MULTI-AGENT GRAPH
+              </p>
+              <p className="font-data text-[9px] max-w-xs text-center" style={{ color: "var(--t-meta)" }}>
+                {loadingStep}
+              </p>
+            </div>
+            <div className="w-52 h-px" style={{ background: "rgba(255,255,255,0.06)" }}>
+              <div
+                className="h-full"
+                style={{ background: "var(--c-cyan)", animation: "loading 9s ease-in-out forwards" }}
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Error ───────────────────────────────────────────────────────────── */}
+      {/* ── Error ────────────────────────────────────────────────────── */}
       {error && !loading && (
         <div className="cyber-panel cyber-panel-danger p-5 flex items-center gap-3">
           <AlertOctagon size={20} className="text-[#ff3366] shrink-0" />
@@ -390,25 +440,30 @@ function SatelliteIntelContent() {
           {/* Agent Timeline */}
           <AgentTimeline active={timelineActive} />
 
-          {/* 4 Agent Metric Cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {/* 4 Agent Metric Cards — instrument-panel style */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {agentCards.map((card, i) => (
               <motion.div
                 key={card.eyebrow}
-                initial={{ opacity: 0, y: 16 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1, duration: 0.4 }}
-                className="cyber-panel p-4"
-                style={{ borderColor: `${card.color}15` }}
+                transition={{ delay: i * 0.08, duration: 0.3 }}
+                className="p-4 rounded"
+                style={{
+                  background: "var(--c-surface-0)",
+                  border: `1px solid ${card.color}18`,
+                }}
               >
-                <span className="eyebrow block mb-2">{card.eyebrow}</span>
+                <span className="label block mb-2">{card.eyebrow.toUpperCase()}</span>
                 <div className="flex items-baseline gap-1 mb-1">
-                  <span className="font-digital text-2xl font-bold" style={{ color: card.color }}>
+                  <span className="font-data text-2xl font-bold tabular-nums" style={{ color: card.color }}>
                     {card.metric}
                   </span>
-                  <span className="font-digital text-xs text-slate-500">{card.unit}</span>
+                  <span className="font-data text-[10px]" style={{ color: "var(--t-meta)" }}>{card.unit}</span>
                 </div>
-                <p className="font-digital text-[9px] text-slate-500 uppercase mb-2">{card.detail}</p>
+                <p className="font-data text-[8px] uppercase tracking-widest mb-2" style={{ color: "var(--t-meta)" }}>
+                  {card.detail}
+                </p>
                 <Sparkline data={card.spark} color={card.color} />
               </motion.div>
             ))}

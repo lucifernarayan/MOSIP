@@ -4,26 +4,28 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navItems } from "@/utils/mosip-data";
-import { User, Satellite, Shield, ChevronRight } from "lucide-react";
+import { User } from "lucide-react";
 import { getHealth, getMetricsSummary, type HealthPayload } from "@/utils/api";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [utc, setUtc] = useState("");
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [trackedCount, setTrackedCount] = useState<number | null>(null);
+  const [alertCount, setAlertCount] = useState<number | null>(null);
 
+  /* ── Mission Clock — ticks every second ─── */
   useEffect(() => {
     const tick = () => {
       const d = new Date();
-      setUtc(d.toISOString().slice(11, 19) + " UTC");
+      setUtc(d.toISOString().replace("T", "  ").slice(0, 19) + " Z");
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
 
+  /* ── System health + metrics — polls every 30s ─── */
   useEffect(() => {
     let cancelled = false;
     async function loadStatus() {
@@ -35,172 +37,228 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setHealth(healthPayload);
         setTrackedCount(metricsPayload.total_satellites ?? null);
+        setAlertCount(metricsPayload.critical_risk_count ?? null);
       } catch {
         if (!cancelled) setHealth({ status: "degraded" });
       }
     }
     loadStatus();
     const id = setInterval(loadStatus, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
-  const systemsNominal = health?.status === "ok";
+  const isNominal = health?.status === "ok";
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "var(--color-bg)" }}>
-      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
+    <div
+      className="flex h-screen overflow-hidden"
+      style={{ background: "var(--c-base)" }}
+    >
+      {/* ══════════════════════════════════════════════════════
+          PERSISTENT LEFT NAV RAIL
+          Always visible, icon + label, never collapses on desktop
+          ══════════════════════════════════════════════════════ */}
       <aside
-        onMouseEnter={() => setSidebarExpanded(true)}
-        onMouseLeave={() => setSidebarExpanded(false)}
-        className="fixed left-0 top-0 z-50 flex h-full flex-col border-r transition-all duration-300 ease-out"
+        className="fixed left-0 top-0 z-50 flex h-full flex-col"
         style={{
-          width: sidebarExpanded ? "var(--sidebar-w-expanded)" : "var(--sidebar-w-collapsed)",
-          borderColor: "var(--color-border)",
-          background: "rgba(2,4,10,0.96)",
-          backdropFilter: "blur(20px)",
+          width: "var(--sidebar-w)",
+          background: "var(--c-surface-0)",
+          borderRight: "1px solid var(--c-border)",
         }}
       >
-        {/* Logo */}
+        {/* Logo mark */}
         <div
-          className="flex h-[var(--topbar-h)] items-center gap-2.5 border-b px-3"
-          style={{ borderColor: "var(--color-border)" }}
+          className="flex h-[var(--topbar-h)] items-center justify-center"
+          style={{ borderBottom: "1px solid var(--c-border)" }}
         >
           <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg relative"
+            className="flex h-[28px] w-[28px] items-center justify-center"
             style={{
-              background: "rgba(0,212,255,0.08)",
-              border: "1px solid rgba(0,212,255,0.2)",
-              boxShadow: "0 0 12px rgba(0,212,255,0.1)",
+              background: "rgba(77,217,245,0.07)",
+              border: "1px solid rgba(77,217,245,0.22)",
+              borderRadius: "4px",
             }}
           >
-            <Satellite size={14} className="text-[#00d4ff]" />
+            {/* Satellite icon as SVG for precision */}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--c-cyan)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 7L17 3" /><path d="M17 3L21 7" />
+              <path d="M11 13L7 17" /><path d="M7 17L3 21" />
+              <rect x="8" y="8" width="8" height="8" rx="1" />
+              <path d="M8 12H3" /><path d="M16 12H21" />
+            </svg>
           </div>
-          {sidebarExpanded && (
-            <div className="flex flex-col min-w-0">
-              <span className="font-display text-sm font-bold tracking-[0.18em] text-white whitespace-nowrap">
-                MOSIP
-              </span>
-              <span style={{ fontSize: "7px", letterSpacing: "0.3em" }} className="text-[#00d4ff]/40 uppercase font-digital">
-                OPS CENTER
-              </span>
-            </div>
-          )}
         </div>
 
-        {/* Status indicator row */}
-        {sidebarExpanded && (
-          <div className="mx-2 mt-2 flex items-center gap-1.5 rounded-md bg-[rgba(0,255,157,0.04)] border border-[#00ff9d]/10 px-3 py-1.5">
-            <span className="pulse-dot" style={{ background: systemsNominal ? "#00ff9d" : "#ffb700", width: 5, height: 5 }} />
-            <span className="font-digital text-[8px] uppercase tracking-widest text-[#00ff9d]/70">
-              {systemsNominal ? "Systems nominal" : "Systems degraded"}
-            </span>
-          </div>
-        )}
-
-        {/* Nav */}
-        <nav className="flex-1 flex flex-col gap-0.5 p-2 mt-2">
+        {/* Navigation items */}
+        <nav className="flex flex-1 flex-col items-center gap-0.5 py-2 px-1.5">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-200 ${
-                  isActive
-                    ? "bg-[rgba(0,212,255,0.08)] text-white"
-                    : "text-slate-500 hover:bg-white/[0.03] hover:text-slate-300"
-                }`}
-                style={isActive ? { boxShadow: "inset 0 0 12px rgba(0,212,255,0.04)" } : undefined}
+                title={item.label}
+                className="group relative flex h-9 w-full items-center justify-center rounded transition-all duration-150"
+                style={{
+                  background: isActive ? "rgba(77,217,245,0.09)" : "transparent",
+                  borderLeft: isActive ? "2px solid var(--c-cyan)" : "2px solid transparent",
+                }}
               >
                 <Icon
-                  size={17}
-                  className={`shrink-0 transition-colors ${isActive ? "text-[#00d4ff]" : "text-slate-600 group-hover:text-slate-400"}`}
+                  size={15}
+                  style={{
+                    color: isActive ? "var(--c-cyan)" : "var(--t-meta)",
+                    transition: "color 0.15s",
+                  }}
                 />
-                {sidebarExpanded && (
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-semibold tracking-wide truncate">{item.label}</span>
-                    <span className="eyebrow truncate" style={{ fontSize: "7.5px" }}>
-                      {item.eyebrow}
-                    </span>
-                  </div>
-                )}
-                {isActive && sidebarExpanded && (
-                  <ChevronRight size={11} className="ml-auto text-[#00d4ff]/60 shrink-0" />
-                )}
+                {/* Tooltip */}
+                <div
+                  className="pointer-events-none absolute left-full ml-2 hidden whitespace-nowrap rounded px-2 py-1 group-hover:flex"
+                  style={{
+                    background: "var(--c-surface-1)",
+                    border: "1px solid var(--c-border-hi)",
+                    zIndex: 100,
+                  }}
+                >
+                  <span className="font-data text-[9px] uppercase tracking-widest" style={{ color: "var(--t-primary)" }}>
+                    {item.label}
+                  </span>
+                </div>
               </Link>
             );
           })}
         </nav>
 
-        {/* Footer */}
-        <div className="border-t p-3" style={{ borderColor: "var(--color-border)" }}>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-slate-400 border border-white/[0.06]">
-              <User size={13} />
-            </div>
-            {sidebarExpanded && (
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] font-semibold text-white truncate">OPERATOR</span>
-                <span className="text-[8px] text-[#00d4ff]/50 font-digital">CLEARANCE: L4</span>
-              </div>
-            )}
+        {/* Operator identity — bottom of rail */}
+        <div
+          className="flex items-center justify-center py-3"
+          style={{ borderTop: "1px solid var(--c-border)" }}
+        >
+          <div
+            className="flex h-[26px] w-[26px] items-center justify-center rounded-full"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid var(--c-border)",
+              color: "var(--t-meta)",
+            }}
+          >
+            <User size={11} />
           </div>
         </div>
       </aside>
 
-      {/* ── Main area ───────────────────────────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════
+          MAIN CONTENT AREA
+          ══════════════════════════════════════════════════════ */}
       <div
-        className="flex flex-1 flex-col transition-all duration-300 ease-out"
-        style={{ marginLeft: "var(--sidebar-w-collapsed)" }}
+        className="flex flex-1 flex-col"
+        style={{ marginLeft: "var(--sidebar-w)" }}
       >
-        {/* Top bar */}
+        {/* ── Persistent Top Status Bar ─────────────────────────────────────── */}
         <header
-          className="sticky top-0 z-40 flex h-[var(--topbar-h)] items-center justify-between border-b px-5"
+          className="sticky top-0 z-40 flex h-[var(--topbar-h)] items-center justify-between px-5"
           style={{
-            borderColor: "var(--color-border)",
-            background: "rgba(2,4,10,0.94)",
-            backdropFilter: "blur(16px)",
+            background: "rgba(8,12,18,0.96)",
+            borderBottom: "1px solid var(--c-border)",
+            backdropFilter: "blur(12px)",
           }}
         >
-          {/* Wordmark */}
-          <div className="flex items-center gap-2">
-            <Satellite size={13} className="text-[#00d4ff]/60" />
-            <span className="font-display text-sm font-bold tracking-[0.2em] text-white">MOSIP</span>
+          {/* Left: Platform ID */}
+          <div className="flex items-center gap-3">
             <span
-              className="eyebrow hidden sm:inline ml-1"
-              style={{ color: "rgba(0,212,255,0.35)", fontSize: "8px" }}
+              className="font-display tracking-[0.22em] text-[13px]"
+              style={{ color: "var(--t-primary)", letterSpacing: "0.22em" }}
             >
-              ORBITAL INTELLIGENCE
+              MOSIP
+            </span>
+            <span
+              className="hidden sm:block font-data text-[8px] tracking-[0.3em] uppercase"
+              style={{ color: "var(--t-meta)" }}
+            >
+              ORBITAL INTELLIGENCE PLATFORM
             </span>
           </div>
 
-          {/* Status strip */}
-          <div className="hidden md:flex items-center gap-4 font-digital text-[10px] tracking-wider text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <span className="pulse-dot" style={{ background: "var(--color-success)", width: 5, height: 5 }} />
-              <span className={systemsNominal ? "text-[#00ff9d]/80" : "text-[#ffb700]/80"}>
-                {systemsNominal ? "TELEMETRY ACTIVE" : "CHECK HEALTH"}
+          {/* Center: System instrument readouts */}
+          <div className="hidden md:flex items-center gap-5">
+
+            {/* Feed status */}
+            <div className="flex items-center gap-1.5">
+              <span
+                className="pulse-dot"
+                style={{ background: isNominal ? "var(--c-nominal)" : "var(--c-elevated)" }}
+              />
+              <span
+                className="font-data text-[9px] uppercase tracking-widest"
+                style={{ color: isNominal ? "var(--c-nominal)" : "var(--c-elevated)" }}
+              >
+                {isNominal ? "FEED  NOMINAL" : "CHECK  HEALTH"}
               </span>
-            </span>
-            <span className="text-white/[0.08]">|</span>
-            <span className="text-slate-400">{trackedCount?.toLocaleString() ?? "0"} OBJECTS TRACKED</span>
-            <span className="text-white/[0.08]">|</span>
-            <span className="flex items-center gap-1">
-              <Shield size={9} className="text-[#00d4ff]/40" />
-              <span className="text-[#00d4ff]/50">{utc}</span>
-            </span>
+            </div>
+
+            <div className="h-3 w-px" style={{ background: "var(--c-border)" }} />
+
+            {/* Object count */}
+            <div className="flex items-center gap-1.5">
+              <span className="font-data text-[9px] uppercase tracking-widest" style={{ color: "var(--t-meta)" }}>
+                TRACKING
+              </span>
+              <span className="font-data text-[10px]" style={{ color: "var(--t-primary)" }}>
+                {trackedCount != null ? trackedCount.toLocaleString() : "—"}
+              </span>
+              <span className="font-data text-[9px] uppercase tracking-widest" style={{ color: "var(--t-meta)" }}>
+                OBJECTS
+              </span>
+            </div>
+
+            <div className="h-3 w-px" style={{ background: "var(--c-border)" }} />
+
+            {/* Alert count */}
+            <div className="flex items-center gap-1.5">
+              <span className="font-data text-[9px] uppercase tracking-widest" style={{ color: "var(--t-meta)" }}>
+                ALERTS
+              </span>
+              <span
+                className="font-data text-[10px]"
+                style={{ color: (alertCount ?? 0) > 0 ? "var(--c-elevated)" : "var(--t-secondary)" }}
+              >
+                {alertCount != null ? alertCount : "—"}
+              </span>
+            </div>
+
+            <div className="h-3 w-px" style={{ background: "var(--c-border)" }} />
+
+            {/* Agents online */}
+            <div className="flex items-center gap-1.5">
+              <span className="font-data text-[9px] uppercase tracking-widest" style={{ color: "var(--t-meta)" }}>
+                AGENTS
+              </span>
+              <span className="font-data text-[10px]" style={{ color: "var(--c-cyan)" }}>
+                8 / 8
+              </span>
+            </div>
           </div>
 
-          {/* Avatar */}
+          {/* Right: Mission clock */}
           <div
-            className="flex h-7 w-7 items-center justify-center rounded-full border text-slate-500 transition-colors hover:border-[#00d4ff]/30 hover:text-slate-300"
-            style={{ borderColor: "var(--color-border)", background: "rgba(255,255,255,0.03)" }}
+            className="flex items-center gap-2 px-3 py-1 rounded"
+            style={{
+              background: "var(--c-surface-1)",
+              border: "1px solid var(--c-border)",
+            }}
           >
-            <User size={13} />
+            <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+              <circle cx="5" cy="5" r="4.5" stroke="var(--c-cyan)" strokeOpacity="0.5" />
+              <line x1="5" y1="5" x2="5" y2="2" stroke="var(--c-cyan)" strokeWidth="1" />
+              <line x1="5" y1="5" x2="7" y2="5" stroke="var(--c-cyan)" strokeWidth="1" strokeOpacity="0.7" />
+            </svg>
+            <span
+              className="font-data text-[10px] tabular-nums"
+              style={{ color: "var(--t-primary)", letterSpacing: "0.08em" }}
+            >
+              {utc}
+            </span>
           </div>
         </header>
 

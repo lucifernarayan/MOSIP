@@ -18,33 +18,56 @@ export function DashboardCard({
   title,
   eyebrow,
   children,
-  glowColor = "rgba(0,212,255,0.12)",
   isActive = false,
   className = "",
   noPad = false,
   danger = false,
 }: DashboardCardProps) {
-  const glowStyle = danger
-    ? { boxShadow: "0 0 24px rgba(255,51,102,0.12)", borderColor: "rgba(255,51,102,0.25)" }
-    : isActive
-    ? { boxShadow: `0 0 24px ${glowColor}` }
-    : undefined;
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
-      className={`cyber-panel overflow-hidden ${danger ? "cyber-panel-danger" : ""} ${className}`}
-      style={glowStyle}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className={`overflow-hidden ${className}`}
+      style={{
+        background: "var(--c-surface-0)",
+        border: `1px solid ${danger ? "rgba(239,67,67,0.25)" : isActive ? "rgba(77,217,245,0.2)" : "var(--c-border)"}`,
+        borderRadius: "var(--border-r)",
+        boxShadow: isActive
+          ? "0 0 16px rgba(77,217,245,0.07)"
+          : danger
+          ? "0 0 14px rgba(239,67,67,0.05)"
+          : "none",
+      }}
     >
-      <div className="border-b border-white/[0.04] px-5 py-3">
-        {eyebrow && <span className="eyebrow block mb-1">{eyebrow}</span>}
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-white font-display">
-          {title}
-        </h3>
+      {/* Card header */}
+      <div
+        className="flex items-center justify-between px-4 py-2.5"
+        style={{ borderBottom: "1px solid var(--c-border)" }}
+      >
+        <div>
+          {eyebrow && (
+            <span className="eyebrow block mb-0.5">{eyebrow}</span>
+          )}
+          <h3
+            className="font-display text-[11px] uppercase tracking-[0.12em]"
+            style={{ color: "var(--t-primary)" }}
+          >
+            {title}
+          </h3>
+        </div>
+        {isActive && (
+          <div className="flex items-center gap-1.5">
+            <span className="pulse-dot" style={{ background: "var(--c-cyan)" }} />
+          </div>
+        )}
+        {danger && (
+          <div className="flex items-center gap-1.5">
+            <span className="pulse-dot" style={{ background: "var(--c-critical)" }} />
+          </div>
+        )}
       </div>
-      <div className={noPad ? "" : "p-5"}>{children}</div>
+      <div className={noPad ? "" : "p-4"}>{children}</div>
     </motion.div>
   );
 }

@@ -5,11 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   AlertOctagon,
-  ChevronRight,
   Download,
-  FileText,
   Printer,
-  RefreshCw,
   Search,
 } from "lucide-react";
 import {
@@ -63,9 +60,9 @@ function normalizeRisk(value: unknown) {
 }
 
 function riskColor(score: number) {
-  if (score >= 75) return "#ff3366";
-  if (score >= 55) return "#ffb700";
-  return "#00ff9d";
+  if (score >= 75) return "var(--c-critical)";
+  if (score >= 55) return "var(--c-elevated)";
+  return "var(--c-nominal)";
 }
 
 function reportFromAssessment(assessment: AssessmentPayload | null) {
@@ -199,7 +196,7 @@ function ReportCenterContent() {
     const w = window.open("", "_blank");
     if (!w) return;
     w.document.write(`<html><head><title>MOSIP Report - ${satelliteName(selectedSat)}</title>
-      <style>body{background:#02040a;color:#cbd5e1;font-family:'Courier New',monospace;font-size:12px;padding:32px;white-space:pre-wrap;line-height:1.7}</style>
+      <style>body{background:#04050a;color:#8899aa;font-family:'Courier New',monospace;font-size:11px;padding:32px;white-space:pre-wrap;line-height:1.8}</style>
       </head><body>${reportText.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[char] || char)}</body></html>`);
     w.document.close();
     w.print();
@@ -216,85 +213,128 @@ function ReportCenterContent() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-var(--topbar-h))] overflow-hidden cyber-grid">
-      <div className="w-[320px] shrink-0 border-r border-white/[0.04] flex flex-col" style={{ background: "rgba(2,4,10,0.7)" }}>
-        <div className="border-b border-white/[0.05] p-4">
-          <span className="eyebrow block mb-1">PostgreSQL Target Search</span>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-white">Report Target</h2>
-          <form onSubmit={runSearch} className="mt-4 flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
-            <Search size={13} className="shrink-0 text-[#00d4ff]/50" />
+    <div className="flex h-[calc(100vh-var(--topbar-h))] overflow-hidden">
+
+      {/* ── Target selector sidebar ──────────────────────────────────── */}
+      <div
+        className="w-[300px] shrink-0 flex flex-col"
+        style={{ borderRight: "1px solid var(--c-border)", background: "var(--c-surface-0)" }}
+      >
+        {/* Sidebar header */}
+        <div
+          className="px-4 py-3 shrink-0"
+          style={{ borderBottom: "1px solid var(--c-border)" }}
+        >
+          <span className="label block mb-0.5">POSTGRESQL CATALOG</span>
+          <h2 className="font-display text-[11px] uppercase tracking-wider" style={{ color: "var(--t-primary)" }}>
+            REPORT TARGET
+          </h2>
+          <form onSubmit={runSearch} className="mt-3 flex items-center gap-2 h-8 px-3 rounded"
+            style={{ background: "var(--c-surface-1)", border: "1px solid var(--c-border)" }}>
+            <Search size={10} style={{ color: "var(--t-meta)", flexShrink: 0 }} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Name or NORAD ID..."
-              className="min-w-0 flex-1 bg-transparent font-digital text-[11px] text-white outline-none placeholder:text-slate-600"
+              className="min-w-0 flex-1 bg-transparent font-data text-[10px] outline-none"
+              style={{ color: "var(--t-primary)", caretColor: "var(--c-cyan)" }}
             />
             <button
               type="submit"
               disabled={loadingTargets}
-              className="font-digital text-[9px] uppercase tracking-wider text-[#00d4ff] disabled:opacity-40"
+              className="font-data text-[8px] uppercase tracking-widest disabled:opacity-40"
+              style={{ color: "var(--c-cyan)" }}
             >
-              {loadingTargets ? "..." : "Search"}
+              {loadingTargets ? "..." : "GO"}
             </button>
           </form>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2">
+        {/* Column headers */}
+        <div
+          className="grid px-3 py-1.5 shrink-0"
+          style={{
+            gridTemplateColumns: "1fr 36px",
+            borderBottom: "1px solid var(--c-border)",
+          }}
+        >
+          <span className="label">OBJECT</span>
+          <span className="label text-right">RISK</span>
+        </div>
+
+        {/* Target list */}
+        <div className="flex-1 overflow-y-auto">
           {targets.map((sat) => {
             const isSelected = String(sat.norad_id) === selectedId;
             const score = normalizeRisk(sat.risk_score);
+            const scoreColor = riskColor(score);
             return (
               <button
                 key={sat.norad_id}
                 onClick={() => selectSatellite(sat.norad_id)}
-                className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-all mb-0.5 border-l-2 ${
-                  isSelected
-                    ? "bg-[rgba(0,212,255,0.06)] border-[#00d4ff]"
-                    : "border-transparent hover:bg-white/[0.02] hover:border-white/10"
-                }`}
+                className="grid w-full px-3 py-2 text-left transition-all"
+                style={{
+                  gridTemplateColumns: "1fr 36px",
+                  background: isSelected ? "var(--c-cyan-ghost)" : "transparent",
+                  borderLeft: `2px solid ${isSelected ? "var(--c-cyan)" : "transparent"}`,
+                  borderBottom: "1px solid rgba(255,255,255,0.025)",
+                }}
               >
-                <div className="flex-1 min-w-0">
-                  <span className="block truncate text-xs font-semibold text-white">{sat.object_name}</span>
-                  <span className="font-digital text-[9px] text-slate-500">
-                    {sat.norad_id} · {sat.orbit_type || "pending orbit"}
+                <div className="min-w-0">
+                  <span
+                    className="block truncate font-data text-[10px]"
+                    style={{ color: isSelected ? "var(--t-primary)" : "var(--t-secondary)" }}
+                  >
+                    {sat.object_name}
+                  </span>
+                  <span className="font-data text-[8px]" style={{ color: "var(--t-meta)" }}>
+                    {sat.norad_id}&nbsp;&middot;&nbsp;{sat.orbit_type || "--"}
                   </span>
                 </div>
                 {sat.risk_score != null && (
-                  <span className="font-digital text-xs font-bold" style={{ color: riskColor(score) }}>{score}%</span>
+                  <div className="flex items-center justify-end">
+                    <span className="font-data text-[10px] tabular-nums" style={{ color: scoreColor }}>
+                      {score}
+                    </span>
+                  </div>
                 )}
-                {isSelected && <ChevronRight size={10} className="text-[#00d4ff]/50 shrink-0" />}
               </button>
             );
           })}
 
           {!loadingTargets && targets.length === 0 && (
-            <div className="px-4 py-10 text-center font-digital text-[10px] uppercase tracking-wider text-slate-600">
-              No satellites matched this search.
+            <div className="px-4 py-10 text-center">
+              <span className="label">NO TARGETS FOUND</span>
             </div>
           )}
         </div>
       </div>
 
+      {/* ── Report workspace ──────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col overflow-hidden">
+
+        {/* Report header bar */}
         <div
-          className="flex items-center justify-between border-b border-white/[0.04] px-6 py-3"
-          style={{ background: "rgba(2,4,10,0.88)", backdropFilter: "blur(12px)" }}
+          className="flex items-center justify-between px-5 py-2.5 shrink-0"
+          style={{ borderBottom: "1px solid var(--c-border)", background: "var(--c-surface-0)" }}
         >
           <div className="flex items-center gap-3">
-            <FileText size={14} className="text-[#00d4ff]/60" />
             <div>
-              <span className="eyebrow block">LangGraph Report</span>
-              <span className="text-xs font-semibold text-white">{selectedSat ? satelliteName(selectedSat) : "No target selected"}</span>
+              <span className="label block mb-0.5">LANGGRAPH MULTI-AGENT REPORT</span>
+              <span className="font-display text-[12px] uppercase tracking-wider" style={{ color: "var(--t-primary)" }}>
+                {selectedSat ? satelliteName(selectedSat) : "NO TARGET SELECTED"}
+              </span>
             </div>
             {selectedSat && (
               <span
-                className="font-digital text-[8px] uppercase px-2 py-0.5 rounded border"
+                className="font-data text-[8px] uppercase px-2 py-0.5 rounded-sm"
                 style={{
-                  borderColor: `${riskColor(riskScore)}55`,
+                  border: `1px solid ${riskColor(riskScore)}44`,
                   color: riskColor(riskScore),
+                  background: `${riskColor(riskScore)}06`,
                 }}
               >
-                NORAD {selectedSat.norad_id} · {selectedSat.orbit_type || "orbit pending"} · {riskScore || "N/A"}%
+                NORAD&nbsp;{selectedSat.norad_id}&nbsp;&middot;&nbsp;{selectedSat.orbit_type || "ORBIT PENDING"}&nbsp;&middot;&nbsp;{riskScore || "N/A"}%
               </span>
             )}
           </div>
@@ -303,57 +343,119 @@ function ReportCenterContent() {
             <button
               onClick={handleDownload}
               disabled={!reportText}
-              className="btn-ghost flex items-center gap-1.5 rounded-lg px-4 py-2 font-digital text-[10px] uppercase tracking-wider disabled:opacity-40"
+              className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 font-data text-[9px] uppercase tracking-widest rounded disabled:opacity-40"
             >
-              <Download size={12} />
-              Download .txt
+              <Download size={11} />
+              DOWNLOAD .TXT
             </button>
             <button
               onClick={handlePrint}
               disabled={!reportText}
-              className="btn-ghost flex items-center gap-1.5 rounded-lg px-4 py-2 font-digital text-[10px] uppercase tracking-wider disabled:opacity-40"
+              className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 font-data text-[9px] uppercase tracking-widest rounded disabled:opacity-40"
             >
-              <Printer size={12} />
-              Print / PDF
+              <Printer size={11} />
+              PRINT / PDF
             </button>
           </div>
         </div>
 
         <motion.div
           key={selectedId || "empty"}
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="flex-1 overflow-y-auto p-6"
+          transition={{ duration: 0.25 }}
+          className="flex-1 overflow-y-auto p-5"
         >
           {error && (
-            <div className="mb-4 flex items-start gap-3 rounded-lg border border-[#ff3366]/25 bg-[#ff3366]/5 p-4">
-              <AlertOctagon size={18} className="mt-0.5 shrink-0 text-[#ff3366]" />
+            <div
+              className="mb-4 flex items-start gap-3 p-4 rounded"
+              style={{ border: "1px solid rgba(239,67,67,0.25)", background: "rgba(239,67,67,0.04)" }}
+            >
+              <AlertOctagon size={16} style={{ color: "var(--c-critical)", flexShrink: 0, marginTop: 2 }} />
               <div>
-                <h3 className="font-digital text-[10px] uppercase tracking-wider text-[#ff3366]">Backend Connection Fault</h3>
-                <p className="mt-1 text-xs text-slate-400">{error}</p>
-                <p className="mt-1 text-xs text-slate-500">Start the FastAPI backend on port 8000 and confirm PostgreSQL/Qdrant are available.</p>
+                <h3 className="font-data text-[9px] uppercase tracking-widest" style={{ color: "var(--c-critical)" }}>
+                  BACKEND CONNECTION FAULT
+                </h3>
+                <p className="mt-1 text-[11px]" style={{ color: "var(--t-secondary)" }}>{error}</p>
+                <p className="mt-0.5 font-data text-[9px]" style={{ color: "var(--t-meta)" }}>
+                  Ensure FastAPI is running on port 8000. Check PostgreSQL + Qdrant health.
+                </p>
               </div>
             </div>
           )}
 
-          <div className="relative rounded-xl border border-white/[0.04] overflow-hidden" style={{ background: "#030308", minHeight: "600px" }}>
+          {/* Report terminal viewer */}
+          <div
+            className="relative overflow-hidden"
+            style={{
+              background: "#040508",
+              border: "1px solid var(--c-border)",
+              borderRadius: "var(--border-r)",
+              minHeight: "520px",
+            }}
+          >
+            {/* Loading — "Build Log" sequence */}
             {loadingReport && (
-              <div className="absolute inset-0 z-20 grid place-items-center bg-[#030308]/80 backdrop-blur-sm">
-                <div className="flex flex-col items-center gap-3">
-                  <RefreshCw size={20} className="animate-spin text-[#00d4ff]" />
-                  <span className="font-digital text-[10px] uppercase tracking-[0.25em] text-[#00d4ff]/70">
-                    Running MOSIP assessment pipeline
-                  </span>
+              <div
+                className="absolute inset-0 z-20 flex flex-col justify-center items-center gap-3"
+                style={{ background: "rgba(4,5,8,0.92)", backdropFilter: "blur(4px)" }}
+              >
+                <div className="flex flex-col gap-1.5 w-52">
+                  {[
+                    "INITIALIZING AGENT GRAPH",
+                    "LOADING ORBITAL PARAMETERS",
+                    "QUERYING REGULATORY CORPUS",
+                    "SYNTHESIZING ASSESSMENT",
+                    "COMPILING REPORT",
+                  ].map((step, i) => (
+                    <div key={step} className="flex items-center gap-2">
+                      <span className="font-data text-[7px] tabular-nums" style={{ color: "var(--t-meta)" }}>
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span
+                        className="font-data text-[8px] uppercase tracking-widest"
+                        style={{ color: i === 2 ? "var(--c-cyan)" : "var(--t-meta)" }}
+                      >
+                        {step}
+                      </span>
+                      {i <= 2 && (
+                        <span className="font-data text-[7px]" style={{ color: "var(--c-nominal)" }}>OK</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div
+                  className="mt-2 w-52 h-px"
+                  style={{ background: "rgba(255,255,255,0.06)" }}
+                >
+                  <div
+                    className="h-full"
+                    style={{ background: "var(--c-cyan)", animation: "loading 9s ease-in-out forwards" }}
+                  />
                 </div>
               </div>
             )}
 
-            <pre
-              className="relative z-10 p-6 font-digital text-[10.5px] text-slate-300 leading-[1.75] whitespace-pre-wrap select-text"
-              style={{ fontFamily: "'JetBrains Mono', 'Courier New', monospace" }}
+            {/* Report terminal header */}
+            <div
+              className="flex items-center gap-2 px-4 py-2"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
             >
-              {reportText || "Search for a satellite and select a target to generate a live MOSIP intelligence report."}
+              <div className="flex gap-1">
+                <div className="h-2 w-2 rounded-full" style={{ background: "rgba(239,67,67,0.4)" }} />
+                <div className="h-2 w-2 rounded-full" style={{ background: "rgba(245,166,35,0.4)" }} />
+                <div className="h-2 w-2 rounded-full" style={{ background: "rgba(61,232,155,0.4)" }} />
+              </div>
+              <span className="font-data text-[8px] uppercase tracking-widest" style={{ color: "var(--t-meta)" }}>
+                MOSIP / ASSESSMENT / {selectedSat?.norad_id || "--"}
+              </span>
+            </div>
+
+            <pre
+              className="relative z-10 p-5 font-data text-[10px] leading-[1.8] whitespace-pre-wrap select-text"
+              style={{ color: "var(--t-secondary)" }}
+            >
+              {reportText || "Select a target from the sidebar to generate a live MOSIP intelligence report."}
             </pre>
           </div>
         </motion.div>
@@ -365,8 +467,8 @@ function ReportCenterContent() {
 export default function ReportsPage() {
   return (
     <Suspense fallback={
-      <div className="grid h-full min-h-screen place-items-center font-digital text-xs uppercase tracking-[0.3em] text-[#00d4ff]/40">
-        Loading report engine...
+      <div className="grid h-full min-h-screen place-items-center font-data text-[9px] uppercase tracking-[0.3em]" style={{ color: "rgba(77,217,245,0.4)" }}>
+        LOADING REPORT ENGINE...
       </div>
     }>
       <ReportCenterContent />
